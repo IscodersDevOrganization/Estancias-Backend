@@ -15,7 +15,13 @@
         <thead>
             <tr>
                 <th>
+                    Id
+                </th>
+                <th>
                     Nombre
+                </th>
+                <th>
+                    Código
                 </th>
                 <th>
                     Color
@@ -37,7 +43,13 @@
             {
                 <tr>
                     <td>
+                        @item.Id
+                    </td>
+                    <td>
                         @Html.DisplayFor(modelItem => item.Nombre)
+                    </td>
+                    <td>
+                        @item.Codigo
                     </td>
                  <td>
                      @item.Color

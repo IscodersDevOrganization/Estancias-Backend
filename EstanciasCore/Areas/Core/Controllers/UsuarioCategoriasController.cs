@@ -34,7 +34,7 @@ namespace EstanciasCore.Controllers
         }
         public IActionResult ObtenerUsuariosCategorias(Page<UsuariosCategorias> page)
         {
-            page.SelectPage("/UsuarioCategorias/ObtenerUsuariosCategorias", _context.UsuariosCategorias, x => string.IsNullOrEmpty(page.SearchText) || x.Nombre.Contains(page.SearchText));
+            page.SelectPage("/UsuarioCategorias/ObtenerUsuariosCategorias", _context.UsuariosCategorias, x => string.IsNullOrEmpty(page.SearchText) || x.Nombre.Contains(page.SearchText) || (x.Codigo != null && x.Codigo.Contains(page.SearchText)));
             return PartialView("_Listado", page);
         }
 
@@ -83,6 +83,7 @@ namespace EstanciasCore.Controllers
             {
                 UsuariosCategorias d = _context.UsuariosCategorias.Where(s => s.Id == categoria.Id).First();
                 d.Nombre = categoria.Nombre;
+                d.Codigo = categoria.Codigo;
                 d.Color = categoria.Color;
                 d.CodigoColor = categoria.CodigoColor;
                 d.Orden = categoria.Orden;

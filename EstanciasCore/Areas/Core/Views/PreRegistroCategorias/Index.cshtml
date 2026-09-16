@@ -42,7 +42,7 @@
                     <tr>
                         <td>@Html.DisplayFor(modelItem => item.DNI)</td>
                         <td>@Html.DisplayFor(modelItem => item.NombreCompleto)</td>
-                        <td>@Html.DisplayFor(modelItem => item.Categoria)</td>
+                        <td>@(item.Categoria != null ? (string.IsNullOrEmpty(item.Categoria.Codigo) ? item.Categoria.Nombre : $"{item.Categoria.Nombre} ({item.Categoria.Codigo})") : "Sin Categoría")</td>
                         <td>
                             <a onclick="editarCategoria(@item.Id)" title="Editar" class="btn btn-primary btn-xs"><i class="fa fa-edit"></i></a>
                             <a title="Borrar" href="#" onclick="confirmarEliminar(event, '/Core/PreRegistroCategorias/Delete/@item.Id')" class="btn btn-danger btn-xs"><i class="fa fa-trash-o"></i></a>

@@ -33,7 +33,7 @@ namespace EstanciasCore.Endpoints
 
             if (!string.IsNullOrWhiteSpace(q))
             {
-                query = query.Where(c => c.Nombre.Contains(q));
+                query = query.Where(c => c.Nombre.Contains(q) || (c.Codigo != null && c.Codigo.Contains(q)));
             }
 
             var categorias = await query
@@ -42,6 +42,7 @@ namespace EstanciasCore.Endpoints
                 {
                     Id = c.Id,
                     Nombre = c.Nombre,
+                    Codigo = c.Codigo,
                     Color = c.Color,
                     CodigoColor = c.CodigoColor,
                     Orden = c.Orden,
@@ -66,6 +67,7 @@ namespace EstanciasCore.Endpoints
                 {
                     Id = c.Id,
                     Nombre = c.Nombre,
+                    Codigo = c.Codigo,
                     Color = c.Color,
                     CodigoColor = c.CodigoColor,
                     Orden = c.Orden,
@@ -114,6 +116,7 @@ namespace EstanciasCore.Endpoints
             var categoria = new UsuariosCategorias
             {
                 Nombre = request.Nombre,
+                Codigo = request.Codigo,
                 Color = request.Color,
                 CodigoColor = request.CodigoColor,
                 Orden = request.Orden,
@@ -131,6 +134,7 @@ namespace EstanciasCore.Endpoints
                 {
                     Id = categoria.Id,
                     Nombre = categoria.Nombre,
+                    Codigo = categoria.Codigo,
                     Color = categoria.Color,
                     CodigoColor = categoria.CodigoColor,
                     Orden = categoria.Orden,
@@ -174,6 +178,7 @@ namespace EstanciasCore.Endpoints
             }
 
             categoria.Nombre = request.Nombre;
+            categoria.Codigo = request.Codigo;
             categoria.Color = request.Color;
             categoria.CodigoColor = request.CodigoColor;
             categoria.Orden = request.Orden;
@@ -190,6 +195,7 @@ namespace EstanciasCore.Endpoints
                 {
                     Id = categoria.Id,
                     Nombre = categoria.Nombre,
+                    Codigo = categoria.Codigo,
                     Color = categoria.Color,
                     CodigoColor = categoria.CodigoColor,
                     Orden = categoria.Orden,

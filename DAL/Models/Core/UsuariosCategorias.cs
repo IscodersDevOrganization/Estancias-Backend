@@ -8,6 +8,7 @@ namespace DAL.Models
     {
         public int Id { get; set; }
         public string Nombre { get; set; }
+        public string Codigo { get; set; }
         public string Color { get; set; }
         public string CodigoColor { get; set; }
         public int Orden { get; set; }

@@ -16,6 +16,6 @@ namespace DAL.DTOs
 
         [Required(ErrorMessage = "El campo Categoría es obligatorio.")]
         [Display(Name = "Categoría")]
-        public string Categoria { get; set; }
+        public int? CategoriaId { get; set; }
     }
 }

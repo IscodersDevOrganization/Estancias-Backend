@@ -80,9 +80,9 @@ namespace EstanciasCore
             services.AddTransient<IMailService, MailService>();
 
             //Genera Resumen Mensual
-            //services.AddHostedService<ResumenMensualWorker>();
-            //services.AddHostedService<EnvioDeResumenWorker>();
-            //services.AddHostedService<WonderPushWorker>();
+            services.AddHostedService<ResumenMensualWorker>();
+            services.AddHostedService<EnvioDeResumenWorker>();
+            services.AddHostedService<WonderPushWorker>();
 
             services.AddSession();
             services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_2)

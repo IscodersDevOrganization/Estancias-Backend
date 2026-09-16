@@ -262,14 +262,24 @@ namespace EstanciasCore.Areas.Core.Controllers
                 try
                 {
                     string htmlBody = $@"
-                        <div style='font-family: Arial, sans-serif; padding: 20px; color: #333;'>
+                        <div style='font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 600px;'>
+                            <table role='presentation' border='0' cellpadding='0' cellspacing='0' style='width: 100%; margin-bottom: 25px;'>
+                                <tr>
+                                    <td align='center' style='padding: 5px;'>
+                                        <img src='https://portalestancias.com.ar/images/logo-email.png' alt='Textil' style='width: 100%;height: auto; display: block;' />
+                                    </td>                     
+                                </tr>
+                            </table>
+
                             <h2>¡Tu solicitud de tarjeta ha sido aprobada!</h2>
                             <p>Estimado/a <strong>{entity.Nombre} {entity.Apellido}</strong>,</p>
-                            <p>Nos complace informarte que tu solicitud de tarjeta en <strong>Estancias</strong> ha sido <strong>APROBADA</strong> exitosamente.</p>
+                            <p>Queríamos avisarte que tu solicitud de la tarjeta Textil del Campo fue <strong>APROBADA</strong> exitosamente</p>
                             <p style='font-size: 16px; background-color: #f4f4f4; padding: 15px; border-left: 4px solid #28a745;'>
-                                <strong>Número de Tarjeta asignado:</strong> {entity.NumeroTarjeta}
+                                <strong>Número de tarjeta asignado:</strong> {entity.NumeroTarjeta}
                             </p>
-                            <p>Gracias por formar parte de Estancias.</p>
+                            <p>¡Gracias por formar parte de esta comunidad! Te invitamos a registrarte en la app y disfrutar de todos los beneficios exclusivos!</p>
+                            <p>Saludos,<br>
+                            <strong>Equipo Textil del Campo</strong></p>
                             <hr>
                             <small>Este es un correo automático, por favor no responder a este mensaje.</small>
                         </div>";
@@ -311,13 +321,22 @@ namespace EstanciasCore.Areas.Core.Controllers
                 try
                 {
                     string htmlBody = $@"
-                        <div style='font-family: Arial, sans-serif; padding: 20px; color: #333;'>
+                        <div style='font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 600px;'>
+                            <table role='presentation' border='0' cellpadding='0' cellspacing='0' style='width: 100%; margin-bottom: 25px;'>
+                                <tr>
+                                    <td align='center' style='padding: 5px;'>
+                                        <img src='https://portalestancias.com.ar/images/logo-email.png' alt='Textil' style='width: 100%;height: auto; display: block;' />
+                                    </td>    
+                                </tr>
+                            </table>
+
                             <h2>Información sobre tu Solicitud de Tarjeta</h2>
                             <p>Estimado/a <strong>{entity.Nombre} {entity.Apellido}</strong>,</p>
-                            <p>Le informamos que para continuar con el trámite y la gestión de su tarjeta de manera personalizada, <strong>deberá acercarse personalmente a una de nuestras sucursales de Estancias</strong>.</p>
-                            <p>Allí nuestro personal estará a su disposición para resolver su solicitud.</p>
-                            <br>
-                            <p>Saludos cordiales,<br><strong>Equipo de Estancias</strong></p>
+                            <p>Queríamos avisarte que no pudimos validar tu gestión de manera online. Te recomendamos acercarte a nuestra sucursal más cercana para que podamos verificar tu caso nuevamente.</p>
+                            <p>Nuestro personal estará a disposición para resolver tu solicitud</p>
+                            <p>Muchas gracias,</p>
+                            <p>Saludos,<br>
+                            <strong>Equipo Textil del Campo</strong></p>
                             <hr>
                             <small>Este es un correo automático, por favor no responder a este mensaje.</small>
                         </div>";

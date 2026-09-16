@@ -23,13 +23,13 @@ namespace EstanciasCore.Controllers.Mobile
         [AllowAnonymous]
         public MTraeLocalidadDTO TraeLocalidades([FromBody] MTraeLocalidadDTO uat)
         {
-            var Uat = _context.UAT.FirstOrDefault(x => x.Token == uat.UAT);
-            if (Uat == null)
-            {
-                uat.Status = 500;
-                uat.Mensaje = "UAT Invalida";
-                return uat;
-            }
+            //var Uat = _context.UAT.FirstOrDefault(x => x.Token == uat.UAT);
+            //if (Uat == null)
+            //{
+            //    uat.Status = 500;
+            //    uat.Mensaje = "UAT Invalida";
+            //    return uat;
+            //}
             uat.Status = 200;
             uat.Mensaje = "Listado de Localidades";
             IEnumerable<Localidad> Localidades;

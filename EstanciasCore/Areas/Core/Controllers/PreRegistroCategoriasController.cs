@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -7,6 +8,7 @@ using DAL.Models;
 using DAL.DTOs;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using OfficeOpenXml;
 
@@ -22,15 +24,31 @@ namespace EstanciasCore.Areas.Core.Controllers
             _context = context;
         }
 
+        private async Task CargarCategoriasViewBag(int? selectedValue = null)
+        {
+            var list = await _context.UsuariosCategorias
+                .Where(x => x.Activo)
+                .OrderBy(x => x.Orden)
+                .Select(x => new SelectListItem
+                {
+                    Text = string.IsNullOrEmpty(x.Codigo) ? x.Nombre : $"{x.Nombre} ({x.Codigo})",
+                    Value = x.Id.ToString(),
+                    Selected = selectedValue.HasValue && x.Id == selectedValue.Value
+                }).ToListAsync();
+
+            ViewBag.Categorias = list;
+        }
+
         // GET: Administracion/PreRegistroCategorias
         public async Task<IActionResult> Index()
         {
-            return View(await _context.PreRegistroCategorias.ToListAsync());
+            return View(await _context.PreRegistroCategorias.Include(p => p.Categoria).ToListAsync());
         }
 
         // GET: Administracion/PreRegistroCategorias/_Create
-        public IActionResult _Create()
+        public async Task<IActionResult> _Create()
         {
+            await CargarCategoriasViewBag();
             return PartialView();
         }
 
@@ -46,20 +64,25 @@ namespace EstanciasCore.Areas.Core.Controllers
                 if (await _context.PreRegistroCategorias.AnyAsync(p => p.DNI == model.DNI))
                 {
                     ModelState.AddModelError("DNI", "El DNI ingresado ya existe.");
+                    await CargarCategoriasViewBag(model.CategoriaId);
                     return PartialView(model);
                 }
+
+                var categoriaObj = model.CategoriaId.HasValue ? await _context.UsuariosCategorias.FindAsync(model.CategoriaId.Value) : null;
 
                 var entity = new PreRegistroCategorias
                 {
                     DNI = model.DNI,
                     NombreCompleto = model.NombreCompleto,
-                    Categoria = model.Categoria
+                    CategoriaId = model.CategoriaId,
+                    Categoria = categoriaObj
                 };
 
                 _context.Add(entity);
                 await _context.SaveChangesAsync();
                 return RedirectToAction(nameof(Index));
             }
+            await CargarCategoriasViewBag(model.CategoriaId);
             return PartialView(model);
         }
 
@@ -71,7 +94,7 @@ namespace EstanciasCore.Areas.Core.Controllers
                 return NotFound();
             }
 
-            var entity = await _context.PreRegistroCategorias.FindAsync(id);
+            var entity = await _context.PreRegistroCategorias.Include(p => p.Categoria).FirstOrDefaultAsync(p => p.Id == id);
             if (entity == null)
             {
                 return NotFound();
@@ -82,9 +105,10 @@ namespace EstanciasCore.Areas.Core.Controllers
                 Id = entity.Id,
                 DNI = entity.DNI,
                 NombreCompleto = entity.NombreCompleto,
-                Categoria = entity.Categoria
+                CategoriaId = entity.CategoriaId ?? entity.Categoria?.Id
             };
 
+            await CargarCategoriasViewBag(model.CategoriaId);
             return PartialView(model);
         }
 
@@ -100,7 +124,7 @@ namespace EstanciasCore.Areas.Core.Controllers
 
             if (ModelState.IsValid)
             {
-                var entity = await _context.PreRegistroCategorias.FindAsync(id);
+                var entity = await _context.PreRegistroCategorias.Include(p => p.Categoria).FirstOrDefaultAsync(p => p.Id == id);
                 if (entity == null)
                 {
                     return NotFound();
@@ -110,12 +134,16 @@ namespace EstanciasCore.Areas.Core.Controllers
                 if (await _context.PreRegistroCategorias.AnyAsync(p => p.DNI == model.DNI && p.Id != id))
                 {
                     ModelState.AddModelError("DNI", "El DNI ingresado ya está asignado a otro registro.");
+                    await CargarCategoriasViewBag(model.CategoriaId);
                     return PartialView(model);
                 }
 
+                var categoriaObj = model.CategoriaId.HasValue ? await _context.UsuariosCategorias.FindAsync(model.CategoriaId.Value) : null;
+
                 entity.DNI = model.DNI;
                 entity.NombreCompleto = model.NombreCompleto;
-                entity.Categoria = model.Categoria;
+                entity.CategoriaId = model.CategoriaId;
+                entity.Categoria = categoriaObj;
 
                 try
                 {
@@ -135,6 +163,7 @@ namespace EstanciasCore.Areas.Core.Controllers
                 }
                 return RedirectToAction(nameof(Index));
             }
+            await CargarCategoriasViewBag(model.CategoriaId);
             return PartialView(model);
         }
 
@@ -170,7 +199,7 @@ namespace EstanciasCore.Areas.Core.Controllers
                 var worksheet = package.Workbook.Worksheets.Add("Plantilla");
                 worksheet.Cells[1, 1].Value = "DNI";
                 worksheet.Cells[1, 2].Value = "NombreCompleto";
-                worksheet.Cells[1, 3].Value = "Categoria";
+                worksheet.Cells[1, 3].Value = "CodigoCategoria";
 
                 // Formateo de la cabecera
                 using (var range = worksheet.Cells[1, 1, 1, 3])
@@ -231,11 +260,11 @@ namespace EstanciasCore.Areas.Core.Controllers
                         {
                             var dni = worksheet.Cells[row, 1].Value?.ToString()?.Trim();
                             var nombreCompleto = worksheet.Cells[row, 2].Value?.ToString()?.Trim();
-                            var categoria = worksheet.Cells[row, 3].Value?.ToString()?.Trim();
+                            var codigoCategoria = worksheet.Cells[row, 3].Value?.ToString()?.Trim();
 
                             if (!string.IsNullOrEmpty(dni))
                             {
-                                await ProcessRecord(dni, nombreCompleto, categoria);
+                                await ProcessRecord(dni, nombreCompleto, codigoCategoria);
                             }
                         }
                     }
@@ -274,11 +303,11 @@ namespace EstanciasCore.Areas.Core.Controllers
                         {
                             var dni = values[0]?.Trim();
                             var nombreCompleto = values[1]?.Trim();
-                            var categoria = values[2]?.Trim();
+                            var codigoCategoria = values[2]?.Trim();
 
                             if (!string.IsNullOrEmpty(dni))
                             {
-                                await ProcessRecord(dni, nombreCompleto, categoria);
+                                await ProcessRecord(dni, nombreCompleto, codigoCategoria);
                             }
                         }
                     }
@@ -291,15 +320,30 @@ namespace EstanciasCore.Areas.Core.Controllers
             }
         }
 
-        private async Task ProcessRecord(string dni, string nombreCompleto, string categoria)
+        private async Task ProcessRecord(string dni, string nombreCompleto, string codigoCategoria)
         {
-            var existingRecord = await _context.PreRegistroCategorias.FirstOrDefaultAsync(p => p.DNI == dni);
+            UsuariosCategorias categoriaObj = null;
+
+            if (!string.IsNullOrEmpty(codigoCategoria))
+            {
+                categoriaObj = await _context.UsuariosCategorias.FirstOrDefaultAsync(c => c.Codigo == codigoCategoria);
+                if (categoriaObj == null)
+                {
+                    categoriaObj = await _context.UsuariosCategorias.FirstOrDefaultAsync(c => c.Codigo.ToLower() == codigoCategoria.ToLower());
+                }
+            }
+
+            var existingRecord = await _context.PreRegistroCategorias.Include(p => p.Categoria).FirstOrDefaultAsync(p => p.DNI == dni);
 
             if (existingRecord != null)
             {
                 // Update
                 existingRecord.NombreCompleto = nombreCompleto ?? existingRecord.NombreCompleto;
-                existingRecord.Categoria = categoria ?? existingRecord.Categoria;
+                if (categoriaObj != null)
+                {
+                    existingRecord.Categoria = categoriaObj;
+                    existingRecord.CategoriaId = categoriaObj.Id;
+                }
                 _context.Update(existingRecord);
             }
             else
@@ -309,7 +353,8 @@ namespace EstanciasCore.Areas.Core.Controllers
                 {
                     DNI = dni,
                     NombreCompleto = nombreCompleto ?? "",
-                    Categoria = categoria ?? ""
+                    Categoria = categoriaObj,
+                    CategoriaId = categoriaObj?.Id
                 };
                 _context.Add(newRecord);
             }

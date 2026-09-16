@@ -1547,9 +1547,9 @@ namespace EstanciasCore.Controllers
                     user.Token = token;
                     user.activo = false;
                     var preCategoria = _context.PreRegistroCategorias.Where(x => x.DNI==user.Personas.NroDocumento).FirstOrDefault();
-                    if (preCategoria!=null)
+                    if (preCategoria!=null && preCategoria.Categoria != null)
                     {
-                        user.UsuariosCategorias = _context.UsuariosCategorias.Where(x => x.Nombre==preCategoria.Categoria).FirstOrDefault();
+                        user.UsuariosCategorias = preCategoria.Categoria;
                     }
                     else
                     {

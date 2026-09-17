@@ -148,53 +148,7 @@ namespace EstanciasCore.API.Controllers.Billetera
                     MontoProximaCuota = await _datosServices.CalcularMontoProximaCuota(datosMovimientos, fechaActualCuotasProximo);
 
                     //Calculo de Punitorios
-                    MontoPunitorios = await _datosServices.CalcularPunitorios(datosMovimientos.DetallesSolicitud);
-
-                    //Obtiene los datos de la persona
-                    datosPersona = await _datosServices.ObtenerPersona(usuario.Personas.NroDocumento);
-
-                    if(datosPersona!=null)
-                    {
-                        string letraSexo = "";
-                        if (datosPersona.Persona.Sexo.Id == 3)
-                        {
-                            letraSexo = "F";
-                        }
-                        else
-                        {
-                            if (datosPersona.Persona.Sexo.Id == 2)
-                            {
-                                letraSexo = "M";
-                            }
-                            else if (datosPersona.Persona.Sexo.Id == 1)
-                            {
-                                letraSexo = "F";
-                            }
-                        }
-
-                        //Obtiene los datos de la persona
-                        montosConPunitorios = await _datosServices.ObtenerConsulta(usuario.Personas.NroDocumento, letraSexo);
-                        if(montosConPunitorios!=null)
-                        {
-                            DateTime hoy = DateTime.Today;
-                            int diasEnElMes = DateTime.DaysInMonth(hoy.Year, hoy.Month);
-                            DateTime fechaActual = new DateTime(hoy.Year, hoy.Month, diasEnElMes);
-                            totalDeuda = montosConPunitorios.cobranzas.Where(x=>x.fechaVencimiento.Date<=fechaActual).Sum(x => x.importe).ToString();
-                        }
-                        else
-                        {
-
-                            Status = 400;
-                            Mensaje = "Error al obtener montos y punitorios de LOAN";
-                            Resultado = "Error";
-                        }
-                    }
-                    else
-                    {
-                        Status = 400;
-                        Mensaje = "Error al obtener datos de la persona de LOAN";
-                        Resultado = "Error";
-                    }
+                    MontoPunitorios = await _datosServices.CalcularPunitorios(datosMovimientos.DetallesSolicitud);                    
 
                     //Movimientos Tarjeta
                     comprasAgrupadas = await _datosServices.ObtieneUltimosMovimientos(datosMovimientos, 20);
@@ -208,15 +162,54 @@ namespace EstanciasCore.API.Controllers.Billetera
 
                 var datosEmpresa = _context.DatosEstructura.FirstOrDefault();
 
-                /* 
-                var datosEmpresa = _context.DatosEstructura.FirstOrDefault();
-                if (datosEmpresa!=null)
+                //Obtiene los datos de la persona
+                datosPersona = await _datosServices.ObtenerPersona(usuario.Personas.NroDocumento);
+
+                if (datosPersona != null)
                 {
-                    Login.AliasEmpresa = datosEmpresa.Alias;
-                    Login.WhatsappEmpresa = datosEmpresa.Telefono;
-                    Login.CBUEmpresa = datosEmpresa.CBU;
+                    string letraSexo = "";
+                    if (datosPersona.Persona.Sexo.Id == 3)
+                    {
+                        letraSexo = "F";
+                    }
+                    else
+                    {
+                        if (datosPersona.Persona.Sexo.Id == 2)
+                        {
+                            letraSexo = "M";
+                        }
+                        else if (datosPersona.Persona.Sexo.Id == 1)
+                        {
+                            letraSexo = "F";
+                        }
+                    }
+
+                    //Obtiene los datos de la persona
+                    montosConPunitorios = await _datosServices.ObtenerConsulta(usuario.Personas.NroDocumento, letraSexo);
+                    if (montosConPunitorios != null)
+                    {
+                        DateTime hoy = DateTime.Today;
+                        int diasEnElMes = DateTime.DaysInMonth(hoy.Year, hoy.Month);
+                        DateTime fechaActual = new DateTime(hoy.Year, hoy.Month, diasEnElMes);
+                        if (montosConPunitorios.cobranzas != null)
+                        {
+                            totalDeuda = montosConPunitorios.cobranzas.Where(x => x.fechaVencimiento.Date <= fechaActual).Sum(x => x.importe).ToString();
+                        }
+                    }
+                    else
+                    {
+
+                        Status = 400;
+                        Mensaje = "Error al obtener montos y punitorios de LOAN";
+                        Resultado = "Error";
+                    }
                 }
-                */
+                else
+                {
+                    Status = 400;
+                    Mensaje = "Error al obtener datos de la persona de LOAN";
+                    Resultado = "Error";
+                }
 
                 return new JsonResult(
                     new ListaMovimientoTarjetaDTO

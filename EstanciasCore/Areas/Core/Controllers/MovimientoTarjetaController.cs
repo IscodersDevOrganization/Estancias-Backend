@@ -39,6 +39,18 @@ namespace EstanciasCore.Areas.Core.Controllers
         [HttpPost]
         public async Task<IActionResult> Buscar(string busqueda)
         {
+
+            decimal MontoCuota = 0;
+            decimal MontoProximaCuota = 0;
+            decimal MontoPunitorios = 0;
+            decimal DeudaTotal = 0;
+            decimal MontoDisponible = 0;
+            string totalDeuda = "0";
+            List<MovimientoTarjetaDTO> comprasAgrupadas;
+
+            var fechaMesActualCuotas = DateTime.Now;
+            int diasEnMes = DateTime.DaysInMonth(fechaMesActualCuotas.Year, fechaMesActualCuotas.Month);
+
             if (string.IsNullOrWhiteSpace(busqueda))
             {
                 ViewBag.Error = "Por favor ingrese un DNI o Número de Tarjeta para buscar.";
@@ -141,38 +153,32 @@ namespace EstanciasCore.Areas.Core.Controllers
 
                 var datosMovimientos = await _datosServices.ConsultarMovimientos(empresa.UsernameWS.ToLower(), empresa.PasswordWS, nroDocumento, nroTarjeta, 100, 0);
 
-                if (datosMovimientos == null || datosMovimientos.Detalle == null || datosMovimientos.Detalle.Resultado != "EXITO")
+                if (datosMovimientos.Detalle.Resultado == "EXITO")
                 {
-                    string msg = datosMovimientos?.Detalle?.Mensaje ?? "No se encontraron movimientos para los datos ingresados.";
-                    ViewBag.Error = $"Error LOAN: {msg}";
-                    return PartialView("_ResultadoMovimientos", null);
+                    //    string msg = datosMovimientos?.Detalle?.Mensaje ?? "No se encontraron movimientos para los datos ingresados.";
+                    //    ViewBag.Error = $"Error LOAN: {msg}";
+                    //    return PartialView("_ResultadoMovimientos", null);
+               
+
+                    // 4. Calcular datos idéntico a /api/MTarjetas/MovimientoTarjeta
+                
+
+
+                    DateTime fechaActualCuotas = new DateTime(fechaMesActualCuotas.Year, fechaMesActualCuotas.Month, diasEnMes);
+                    DateTime fechaActualCuotasProximo = fechaActualCuotas.AddMonths(1);
+
+                    CultureInfo.CurrentCulture = new CultureInfo("es-AR");
+
+                    if (!string.IsNullOrEmpty(datosMovimientos.Detalle.MontoDisponible))
+                    {
+                        decimal.TryParse(datosMovimientos.Detalle.MontoDisponible.Replace(".", ","), out decimal disp);
+                        MontoDisponible = Math.Round(disp, 2);
+                    }
+
+                    MontoCuota = await _datosServices.CalcularMontoCuota(datosMovimientos, fechaActualCuotas);
+                    MontoProximaCuota = await _datosServices.CalcularMontoProximaCuota(datosMovimientos, fechaActualCuotasProximo);
+                    MontoPunitorios = await _datosServices.CalcularPunitorios(datosMovimientos.DetallesSolicitud);
                 }
-
-                // 4. Calcular datos idéntico a /api/MTarjetas/MovimientoTarjeta
-                decimal MontoCuota = 0;
-                decimal MontoProximaCuota = 0;
-                decimal MontoPunitorios = 0;
-                decimal DeudaTotal = 0;
-                decimal MontoDisponible = 0;
-                string totalDeuda = "0";
-
-                var fechaMesActualCuotas = DateTime.Now;
-                int diasEnMes = DateTime.DaysInMonth(fechaMesActualCuotas.Year, fechaMesActualCuotas.Month);
-
-                DateTime fechaActualCuotas = new DateTime(fechaMesActualCuotas.Year, fechaMesActualCuotas.Month, diasEnMes);
-                DateTime fechaActualCuotasProximo = fechaActualCuotas.AddMonths(1);
-
-                CultureInfo.CurrentCulture = new CultureInfo("es-AR");
-
-                if (!string.IsNullOrEmpty(datosMovimientos.Detalle.MontoDisponible))
-                {
-                    decimal.TryParse(datosMovimientos.Detalle.MontoDisponible.Replace(".", ","), out decimal disp);
-                    MontoDisponible = Math.Round(disp, 2);
-                }
-
-                MontoCuota = await _datosServices.CalcularMontoCuota(datosMovimientos, fechaActualCuotas);
-                MontoProximaCuota = await _datosServices.CalcularMontoProximaCuota(datosMovimientos, fechaActualCuotasProximo);
-                MontoPunitorios = await _datosServices.CalcularPunitorios(datosMovimientos.DetallesSolicitud);
 
                 ResponseObtenerConsultaDTO montosConPunitorios = null;
                 string letraSexo = "F";
@@ -191,16 +197,27 @@ namespace EstanciasCore.Areas.Core.Controllers
                     montosConPunitorios = await _datosServices.ObtenerConsulta(nroDocumento, "M");
                 }
 
+                decimal totalDeudaDec = 0;
+
                 if (montosConPunitorios != null && montosConPunitorios.cobranzas != null && montosConPunitorios.cobranzas.Any())
                 {
                     DateTime hoy = DateTime.Today;
                     int diasEnElMes = DateTime.DaysInMonth(hoy.Year, hoy.Month);
                     DateTime fechaActual = new DateTime(hoy.Year, hoy.Month, diasEnElMes);
 
-                    totalDeuda = montosConPunitorios.cobranzas.Where(x => x.fechaVencimiento.Date <= fechaActual).Sum(x => x.importe).ToString();
+                    // Sumamos directamente convirtiendo a decimal (si importe no era decimal)
+                    totalDeudaDec = montosConPunitorios.cobranzas
+                        .Where(x => x.fechaVencimiento.Date <= fechaActual)
+                        .Sum(x => Convert.ToDecimal(x.importe));
                 }
-
-                var comprasAgrupadas = await _datosServices.ObtieneUltimosMovimientos(datosMovimientos, 20);
+                if (datosMovimientos.Movimientos != null)
+                {
+                    comprasAgrupadas = await _datosServices.ObtieneUltimosMovimientos(datosMovimientos, 20);
+                }
+                else
+                {
+                    comprasAgrupadas = new List<MovimientoTarjetaDTO>();
+                }
                 DeudaTotal = MontoCuota + MontoPunitorios;
 
                 var fechaVencimiento = new DateTime(fechaMesActualCuotas.Year, fechaMesActualCuotas.Month, 10);
@@ -215,7 +232,6 @@ namespace EstanciasCore.Areas.Core.Controllers
                     nombreTitular = $"{personaLoan.Apellido} {personaLoan.Nombres}".Trim();
                 }
 
-                decimal.TryParse(totalDeuda.Replace(".", ","), out decimal totalDeudaDec);
                 string montoAdeudadoFormat = totalDeudaDec.ToString("N2", new CultureInfo("es-AR"));
 
                 var resultadoModel = new ListaMovimientoTarjetaDTO

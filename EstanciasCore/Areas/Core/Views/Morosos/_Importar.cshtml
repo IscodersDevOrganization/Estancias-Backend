@@ -2,11 +2,11 @@
     Layout = null;
 }
 
-<form asp-action="Importar" asp-area="Core" asp-antiforgery="true" enctype="multipart/form-data" method="post">
+<form id="formImportarMorosos" asp-action="Importar" asp-area="Core" asp-antiforgery="true" enctype="multipart/form-data" method="post" onsubmit="confirmarImportacionMorosos(event)">
     <div class="modal-body">
         <div class="form-group">
             <label>Seleccionar archivo (Excel/CSV)</label>
-            <input type="file" name="archivo" class="form-control" accept=".xlsx,.csv" required />
+            <input type="file" id="inputArchivoMorosos" name="archivo" class="form-control" accept=".xlsx,.csv" required />
             <small class="text-muted">Formato esperado: Columnas DNI y NombreCompleto.</small>
         </div>
         <div class="form-group mt-3">
@@ -17,7 +17,33 @@
     </div>
     
     <div class="modal-footer">
-        <a class="btn btn-default" data-dismiss="modal">Cancelar</a>
-        <input type="submit" value="Importar" class="btn btn-success pull-right" />
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-success pull-right">Importar</button>
     </div>
 </form>
+
+<script>
+    function confirmarImportacionMorosos(e) {
+        e.preventDefault();
+        var form = e.target;
+        var fileInput = document.getElementById('inputArchivoMorosos');
+        if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+            return;
+        }
+
+        Swal.fire({
+            title: "¿Desea reemplazar el listado existente?",
+            text: "Esta carga actualizará la lista de incobrables. Los registros que ya no figuren en el nuevo archivo serán desmarcados. ¿Desea continuar?",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonColor: "#28a745",
+            cancelButtonColor: "#d33",
+            confirmButtonText: "Sí, reemplazar",
+            cancelButtonText: "Cancelar"
+        }).then((result) => {
+            if (result.isConfirmed) {
+                form.submit();
+            }
+        });
+    }
+</script>

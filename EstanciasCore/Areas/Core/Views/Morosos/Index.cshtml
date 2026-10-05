@@ -7,8 +7,14 @@
 <div class="box box-info">
     <div class="box-header with-border filtro-grilla">
         <span class="txt-titulo-box">Listado de Morosos</span>
-        <div class="input-group input-group-sm pull-right" style="max-width: 300px;">
-            <a onclick="importarMorosos()" class="btn btn-success btn-sm" title="Importar Archivo" style="margin-right: 5px;">
+        <div class="input-group input-group-sm pull-right" style="max-width: 450px;">
+            <a onclick="verHistorial()" class="btn btn-warning btn-sm" title="Historial de Cargas" style="margin-right: 5px;">
+                <i class="fa fa-history"><span class="hidden-xs"> Historial</span></i>
+            </a>
+            <a href="/Core/Morosos/DescargarListadoVigente" class="btn btn-primary btn-sm" title="Descargar Listado Vigente" style="margin-right: 5px;">
+                <i class="fa fa-download"><span class="hidden-xs"> Descargar Listado</span></i>
+            </a>
+            <a onclick="importarMorosos()" class="btn btn-success btn-sm" title="Importar Archivo">
                 <i class="fa fa-upload"><span class="hidden-xs"> Importar</span></i>
             </a>
         </div>
@@ -19,12 +25,21 @@
         {
             <div class="alert alert-success">@TempData["Success"]</div>
         }
+        @if (TempData["Warning"] != null)
+        {
+            <div class="alert alert-warning">@TempData["Warning"]</div>
+        }
         @if (TempData["Error"] != null)
         {
             <div class="alert alert-danger">@TempData["Error"]</div>
         }
 
-        <table id="listadoMorosos" class="table table-hover table-bordered table-responsive borde_interno">
+        <div id="loadingMorosos" class="text-center" style="padding: 40px 0;">
+            <i class="fa fa-spinner fa-spin fa-3x fa-fw text-info"></i>
+            <p style="margin-top: 10px; color: #666; font-weight: 500;">Cargando listado de morosos...</p>
+        </div>
+
+        <table id="listadoMorosos" class="table table-hover table-bordered table-responsive borde_interno" style="display: none; width: 100%;">
             <thead>
                 <tr>
                     <th>DNI</th>
@@ -46,40 +61,53 @@
     </div>
 </div>
 
-<modal title="Nuevo Moroso" callback-modal="true" function="nuevoMoroso" load-url="/Core/Morosos/_Create/" size="Medium"></modal>
-<modal title="Edición de Moroso" callback-modal="true" function="editarMoroso" load-url="/Core/Morosos/_Edit/" size="Medium"></modal>
 <modal title="Importar Morosos" callback-modal="true" function="importarMorosos" load-url="/Core/Morosos/_Importar/" size="Medium"></modal>
+<modal title="Historial de Cargas de Morosos" callback-modal="true" function="verHistorial" load-url="/Core/Morosos/_VerHistorial/" size="Large"></modal>
 
 <script>
-    function confirmarEliminar(e, url) {
-        e.preventDefault();
-        Swal.fire({
-            title: "¿Está seguro?",
-            text: "¿Desea borrar este registro?",
-            icon: "warning",
-            showCancelButton: true,
-            confirmButtonColor: "#d33",
-            cancelButtonColor: "#3085d6",
-            confirmButtonText: "Borrar",
-            cancelButtonText: "Cancelar"
-        }).then((result) => {
-            if (result.isConfirmed) {
-                window.location.href = url;
-            }
-        });
-    }
-
     $(document).ready(function () {
         $('#listadoMorosos').DataTable({
             "columnDefs": [
-                { "width": "20%", "targets": 0 },
-                { "width": "45%", "targets": 1 },
-                { "width": "25%", "targets": 2 },
-                { "width": "10%", "targets": 3, "orderable": false, "searchable": false, class: "text-center" }
+                { "width": "25%", "targets": 0 },
+                { "width": "50%", "targets": 1 },
+                { "width": "25%", "targets": 2 }
             ],
             "language": {
                 'url': '@Url.Content("~/lib/arg.json")'
+            },
+            "initComplete": function () {
+                $('#loadingMorosos').hide();
+                $('#listadoMorosos').fadeIn(150);
             }
         });
     });
 </script>
+
+@if (TempData["ErroresImportacion"] != null)
+{
+    var erroresJson = TempData["ErroresImportacion"].ToString();
+    <script>
+        $(document).ready(function () {
+            try {
+                var errores = @Html.Raw(erroresJson);
+                if (errores && errores.length > 0) {
+                    var htmlList = '<div style="max-height: 250px; overflow-y: auto; text-align: left; background: #fff3cd; color: #856404; padding: 12px; border: 1px solid #ffeeba; border-radius: 4px; font-size: 13px;">';
+                    htmlList += '<ul style="margin: 0; padding-left: 20px;">';
+                    for (var i = 0; i < errores.length; i++) {
+                        htmlList += '<li style="margin-bottom: 4px;">' + $('<div>').text(errores[i]).html() + '</li>';
+                    }
+                    htmlList += '</ul></div>';
+
+                    Swal.fire({
+                        title: 'Registros rechazados u omitidos (' + errores.length + ')',
+                        html: htmlList,
+                        icon: 'warning',
+                        confirmButtonText: 'Entendido',
+                        confirmButtonColor: '#f39c12',
+                        width: '600px'
+                    });
+                }
+            } catch (e) { }
+        });
+    </script>
+}

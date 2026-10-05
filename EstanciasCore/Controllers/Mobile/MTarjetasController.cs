@@ -1,4 +1,4 @@
-﻿using DAL.Data;
+using DAL.Data;
 using DAL.DTOs;
 using DAL.DTOs.API;
 using DAL.DTOs.ApiCpeCreditos;
@@ -972,6 +972,7 @@ namespace EstanciasCore.API.Controllers.Billetera
                     Nombre = solicitudDTO.Nombre,
                     Apellido = solicitudDTO.Apellido,
                     DNI = solicitudDTO.DNI,
+                    Telefono = solicitudDTO.Telefono,
                     Email = solicitudDTO.Email,
                     FechaNacimiento = solicitudDTO.FechaNacimiento,
                     Calle = solicitudDTO.Calle,

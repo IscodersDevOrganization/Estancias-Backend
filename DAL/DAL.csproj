@@ -20,6 +20,8 @@
     <Compile Remove="Migrations\20250813142610_add-column-UsuarioId.Designer.cs" />
     <Compile Remove="Migrations\20251209135828_AgregaPlataformaBanner.cs" />
     <Compile Remove="Migrations\20251209135828_AgregaPlataformaBanner.Designer.cs" />
+    <Compile Remove="Migrations\20261005214557_add-table-HistoricoDeCargaMorosos.cs" />
+    <Compile Remove="Migrations\20261005214557_add-table-HistoricoDeCargaMorosos.Designer.cs" />
   </ItemGroup>
 
   <ItemGroup>

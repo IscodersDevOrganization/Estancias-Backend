@@ -20,6 +20,9 @@ namespace DAL.DTOs
         [Display(Name = "DNI")]
         public string DNI { get; set; }
 
+        [Display(Name = "Teléfono")]
+        public string Telefono { get; set; }
+
         [Required(ErrorMessage = "El campo Email es obligatorio.")]
         [EmailAddress(ErrorMessage = "Ingrese un correo electrónico válido.")]
         [Display(Name = "Email")]

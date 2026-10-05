@@ -1,0 +1,132 @@
+@model IEnumerable<DAL.Models.HistoricoDeCargaMorosos>
+
+@{
+    Layout = null;
+}
+
+<style>
+    @@media (min-width: 768px) {
+        .modal-dialog {
+            width: 92% !important;
+            max-width: 1350px !important;
+        }
+    }
+</style>
+
+<div class="modal-body" style="padding: 15px 20px;">
+    <div class="table-responsive" style="overflow-x: hidden;">
+        <table id="tablaHistorialMorosos" class="table table-hover table-bordered table-striped" style="width: 100%; table-layout: fixed;">
+            <thead>
+                <tr style="background-color: #f4f6f9;">
+                    <th style="width: 12%;">Fecha Carga</th>
+                    <th style="width: 16%;">Usuario</th>
+                    <th class="text-center" style="width: 8%;">Totales</th>
+                    <th class="text-center" style="width: 8%;">Cargados</th>
+                    <th class="text-center" style="width: 8%;">Fallidos</th>
+                    <th class="text-center" style="width: 8%;">Omitidos</th>
+                    <th style="width: 40%;">Observaciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr>
+                        <td style="vertical-align: middle;">@item.FechaCarga.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td style="vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word;">@(item.Usuario != null ? (item.Usuario.UserName ?? item.Usuario.Email) : "Sistema")</td>
+                        <td class="text-center" style="vertical-align: middle; font-weight: bold;">@item.RegistrosTotales</td>
+                        <td class="text-center" style="vertical-align: middle;">
+                            <span class="label label-success" style="font-size: 11px; padding: 4px 8px; display: inline-block;">@item.Cargados</span>
+                        </td>
+                        <td class="text-center" style="vertical-align: middle;">
+                            @if (item.Fallidos > 0)
+                            {
+                                <span class="label label-danger" style="font-size: 11px; padding: 4px 8px; display: inline-block;">@item.Fallidos</span>
+                            }
+                            else
+                            {
+                                <span class="label label-default" style="font-size: 11px; padding: 4px 8px; display: inline-block; background-color: #d2d6de; color: #444;">0</span>
+                            }
+                        </td>
+                        <td class="text-center" style="vertical-align: middle;">
+                            @if (item.Omitidos > 0)
+                            {
+                                <span class="label label-warning" style="font-size: 11px; padding: 4px 8px; display: inline-block;">@item.Omitidos</span>
+                            }
+                            else
+                            {
+                                <span class="label label-default" style="font-size: 11px; padding: 4px 8px; display: inline-block; background-color: #d2d6de; color: #444;">0</span>
+                            }
+                        </td>
+                        <td style="vertical-align: middle; word-wrap: break-word; white-space: normal; font-size: 12px; color: #555;">
+                            @if (!string.IsNullOrEmpty(item.Observacion))
+                            {
+                                var obs = item.Observacion;
+                                string mainText = obs;
+                                string detallesText = null;
+
+                                if (obs.Contains(" Detalle: "))
+                                {
+                                    var partes = obs.Split(new[] { " Detalle: " }, StringSplitOptions.None);
+                                    mainText = partes[0];
+                                    detallesText = partes[1];
+                                }
+
+                                if (mainText.Contains("Importación del archivo '"))
+                                {
+                                    var startIdx = mainText.IndexOf("'") + 1;
+                                    var endIdx = mainText.IndexOf("'", startIdx);
+                                    if (startIdx > 0 && endIdx > startIdx)
+                                    {
+                                        mainText = "Archivo: " + mainText.Substring(startIdx, endIdx - startIdx);
+                                    }
+                                }
+
+                                <div><strong>@mainText</strong></div>
+
+                                if (!string.IsNullOrEmpty(detallesText))
+                                {
+                                    <div style="margin-top: 5px; padding: 6px 10px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 4px; font-size: 11px; max-height: 120px; overflow-y: auto;">
+                                        <strong style="color: #856404;">Detalles de registros fallidos/omitidos:</strong>
+                                        <ul style="margin: 3px 0 0 0; padding-left: 15px; color: #856404;">
+                                            @foreach (var err in detallesText.Split(new[] { " | " }, StringSplitOptions.RemoveEmptyEntries))
+                                            {
+                                                <li>@err</li>
+                                            }
+                                        </ul>
+                                    </div>
+                                }
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+<div class="modal-footer">
+    <button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button>
+</div>
+
+<script>
+    $(document).ready(function () {
+        if ($.fn.DataTable.isDataTable('#tablaHistorialMorosos')) {
+            $('#tablaHistorialMorosos').DataTable().destroy();
+        }
+        $('#tablaHistorialMorosos').DataTable({
+            "order": [[0, "desc"]],
+            "autoWidth": false,
+            "columnDefs": [
+                { "width": "12%", "targets": 0 },
+                { "width": "16%", "targets": 1 },
+                { "width": "8%", "targets": 2, "className": "text-center" },
+                { "width": "8%", "targets": 3, "className": "text-center" },
+                { "width": "8%", "targets": 4, "className": "text-center" },
+                { "width": "8%", "targets": 5, "className": "text-center" },
+                { "width": "40%", "targets": 6 }
+            ],
+            "language": {
+                'url': '@Url.Content("~/lib/arg.json")'
+            }
+        });
+    });
+</script>

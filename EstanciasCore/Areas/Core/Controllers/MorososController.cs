@@ -183,6 +183,17 @@ namespace EstanciasCore.Areas.Core.Controllers
             return PartialView();
         }
 
+        // GET: Core/Morosos/_VerHistorial
+        public async Task<IActionResult> _VerHistorial()
+        {
+            var historial = await _context.HistoricoDeCargaMorosos
+                .Include(h => h.Usuario)
+                .OrderByDescending(h => h.FechaCarga)
+                .ToListAsync();
+
+            return PartialView("_VerHistorial", historial);
+        }
+
         // GET: Core/Morosos/DescargarPlantilla
         public IActionResult DescargarPlantilla()
         {
@@ -202,6 +213,39 @@ namespace EstanciasCore.Areas.Core.Controllers
             }
         }
 
+        // GET: Core/Morosos/DescargarListadoVigente
+        public async Task<IActionResult> DescargarListadoVigente()
+        {
+            var listado = await _context.Morosos.OrderBy(m => m.NombreCompleto).ToListAsync();
+
+            using (var package = new ExcelPackage())
+            {
+                var worksheet = package.Workbook.Worksheets.Add("Morosos_Vigentes");
+                worksheet.Cells[1, 1].Value = "DNI";
+                worksheet.Cells[1, 2].Value = "NombreCompleto";
+                worksheet.Cells[1, 3].Value = "FechaCarga";
+
+                using (var range = worksheet.Cells[1, 1, 1, 3])
+                {
+                    range.Style.Font.Bold = true;
+                }
+
+                int row = 2;
+                foreach (var item in listado)
+                {
+                    worksheet.Cells[row, 1].Value = item.DNI;
+                    worksheet.Cells[row, 2].Value = item.NombreCompleto;
+                    worksheet.Cells[row, 3].Value = item.FechaCarga.ToString("dd/MM/yyyy HH:mm");
+                    row++;
+                }
+
+                worksheet.Cells.AutoFitColumns();
+
+                var stream = new MemoryStream(package.GetAsByteArray());
+                return File(stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"Listado_Morosos_Vigentes_{DateTime.Now:yyyyMMdd}.xlsx");
+            }
+        }
+
         // POST: Core/Morosos/Importar
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -216,14 +260,18 @@ namespace EstanciasCore.Areas.Core.Controllers
             var extension = Path.GetExtension(archivo.FileName).ToLower();
 
             List<(string DNI, string NombreCompleto)> registrosArchivo = new List<(string DNI, string NombreCompleto)>();
+            List<string> erroresLectura = new List<string>();
+            int registrosTotales = 0;
+            int fallidos = 0;
+            int omitidos = 0;
 
             if (extension == ".xlsx")
             {
-                registrosArchivo = await LeerExcel(archivo);
+                (registrosArchivo, erroresLectura, registrosTotales, fallidos, omitidos) = await LeerExcel(archivo);
             }
             else if (extension == ".csv")
             {
-                registrosArchivo = await LeerCsv(archivo);
+                (registrosArchivo, erroresLectura, registrosTotales, fallidos, omitidos) = await LeerCsv(archivo);
             }
             else
             {
@@ -231,14 +279,56 @@ namespace EstanciasCore.Areas.Core.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
+            if (erroresLectura.Any())
+            {
+                TempData["ErroresImportacion"] = Newtonsoft.Json.JsonConvert.SerializeObject(erroresLectura);
+            }
+
             await ProcesarSincronizacionMorosos(registrosArchivo);
+
+            // Guardar registro en HistoricoDeCargaMorosos
+            try
+            {
+                var usuarioActual = _context.Usuarios.FirstOrDefault(x => x.UserName == User.Identity.Name || x.Email == User.Identity.Name);
+                int cargados = registrosArchivo.Count;
+
+                string observacion = $"Archivo: '{archivo.FileName}'";
+                if (erroresLectura.Any())
+                {
+                    observacion += " Detalle: " + string.Join(" | ", erroresLectura);
+                }
+
+                var historico = new HistoricoDeCargaMorosos
+                {
+                    RegistrosTotales = registrosTotales,
+                    Cargados = cargados,
+                    Fallidos = fallidos,
+                    Omitidos = omitidos,
+                    Observacion = observacion,
+                    Usuario = usuarioActual,
+                    FechaCarga = DateTime.Now
+                };
+
+                _context.HistoricoDeCargaMorosos.Add(historico);
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Error($"Error al guardar HistoricoDeCargaMorosos: {ex.Message}");
+            }
 
             return RedirectToAction(nameof(Index));
         }
 
-        private async Task<List<(string DNI, string NombreCompleto)>> LeerExcel(IFormFile archivo)
+        private async Task<(List<(string DNI, string NombreCompleto)> Registros, List<string> Errores, int RegistrosTotales, int Fallidos, int Omitidos)> LeerExcel(IFormFile archivo)
         {
-            var result = new List<(string DNI, string NombreCompleto)>();
+            var registros = new List<(string DNI, string NombreCompleto)>();
+            var errores = new List<string>();
+            var dnisVistos = new HashSet<string>();
+            int registrosTotales = 0;
+            int fallidos = 0;
+            int omitidos = 0;
+
             using (var stream = new MemoryStream())
             {
                 await archivo.CopyToAsync(stream);
@@ -251,28 +341,49 @@ namespace EstanciasCore.Areas.Core.Controllers
 
                     for (int row = 2; row <= rowCount; row++)
                     {
+                        registrosTotales++;
                         var dni = worksheet.Cells[row, 1].Value?.ToString()?.Trim();
                         var nombreCompleto = worksheet.Cells[row, 2].Value?.ToString()?.Trim();
 
-                        if (!string.IsNullOrEmpty(dni))
+                        if (string.IsNullOrWhiteSpace(dni))
                         {
-                            result.Add((dni, nombreCompleto ?? ""));
+                            fallidos++;
+                            errores.Add($"Fila {row}: DNI vacío");
+                            continue;
                         }
+
+                        if (dnisVistos.Contains(dni))
+                        {
+                            omitidos++;
+                            errores.Add($"Fila {row}: DNI {dni} duplicado en el archivo");
+                            continue;
+                        }
+
+                        dnisVistos.Add(dni);
+                        registros.Add((dni, nombreCompleto ?? ""));
                     }
                 }
             }
-            return result;
+            return (registros, errores, registrosTotales, fallidos, omitidos);
         }
 
-        private async Task<List<(string DNI, string NombreCompleto)>> LeerCsv(IFormFile archivo)
+        private async Task<(List<(string DNI, string NombreCompleto)> Registros, List<string> Errores, int RegistrosTotales, int Fallidos, int Omitidos)> LeerCsv(IFormFile archivo)
         {
-            var result = new List<(string DNI, string NombreCompleto)>();
+            var registros = new List<(string DNI, string NombreCompleto)>();
+            var errores = new List<string>();
+            var dnisVistos = new HashSet<string>();
+            int registrosTotales = 0;
+            int fallidos = 0;
+            int omitidos = 0;
+
             using (var reader = new StreamReader(archivo.OpenReadStream()))
             {
                 var isFirstRow = true;
+                int row = 1;
                 while (!reader.EndOfStream)
                 {
                     var line = await reader.ReadLineAsync();
+                    row++;
                     if (string.IsNullOrWhiteSpace(line)) continue;
 
                     if (isFirstRow)
@@ -281,22 +392,40 @@ namespace EstanciasCore.Areas.Core.Controllers
                         continue;
                     }
 
+                    registrosTotales++;
                     char separator = line.Contains(";") ? ';' : ',';
                     var values = line.Split(separator);
 
-                    if (values.Length >= 2)
+                    if (values.Length >= 1)
                     {
                         var dni = values[0]?.Trim();
-                        var nombreCompleto = values[1]?.Trim();
+                        var nombreCompleto = values.Length >= 2 ? values[1]?.Trim() : "";
 
-                        if (!string.IsNullOrEmpty(dni))
+                        if (string.IsNullOrWhiteSpace(dni))
                         {
-                            result.Add((dni, nombreCompleto ?? ""));
+                            fallidos++;
+                            errores.Add($"Fila {row}: DNI vacío");
+                            continue;
                         }
+
+                        if (dnisVistos.Contains(dni))
+                        {
+                            omitidos++;
+                            errores.Add($"Fila {row}: DNI {dni} duplicado en el archivo");
+                            continue;
+                        }
+
+                        dnisVistos.Add(dni);
+                        registros.Add((dni, nombreCompleto ?? ""));
+                    }
+                    else
+                    {
+                        fallidos++;
+                        errores.Add($"Fila {row}: Formato de fila incorrecto");
                     }
                 }
             }
-            return result;
+            return (registros, errores, registrosTotales, fallidos, omitidos);
         }
 
         private async Task ProcesarSincronizacionMorosos(List<(string DNI, string NombreCompleto)> registrosArchivo)

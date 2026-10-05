@@ -37,6 +37,7 @@
                     <th>Nombre</th>
                     <th>Apellido</th>
                     <th>DNI</th>
+                    <th>Teléfono</th>
                     <th>Email</th>
                     <th>Fecha Nacimiento</th>
                     <th>Domicilio</th>
@@ -55,6 +56,7 @@
                         <td>@Html.DisplayFor(modelItem => item.Nombre)</td>
                         <td>@Html.DisplayFor(modelItem => item.Apellido)</td>
                         <td>@Html.DisplayFor(modelItem => item.DNI)</td>
+                        <td>@Html.DisplayFor(modelItem => item.Telefono)</td>
                         <td>@Html.DisplayFor(modelItem => item.Email)</td>
                         <td>@item.FechaNacimiento.ToString("dd/MM/yyyy")</td>
                         <td>@item.Calle @item.Altura @item.PisoDepto , @(item.Localidad!=null?item.Localidad.Descripcion:"") , @(item.Provincia!=null?item.Provincia.Descripcion:"")</td>
@@ -69,6 +71,10 @@
                             {
                                 <span class="label label-danger" style="background-color: #dd4b39; font-size: 11px; padding: 4px 8px;">Rechazada</span>
                             }
+                            else if (estadoId == 4)
+                            {
+                                <span class="label label-warning" style="background-color: #f39c12; font-size: 11px; padding: 4px 8px;">Nueva Revisión</span>
+                            }
                             else
                             {
                                 <span class="label label-primary" style="background-color: #3c8dbc; font-size: 11px; padding: 4px 8px;">Pendiente</span>
@@ -79,12 +85,13 @@
                         </td>
                         <td class="text-center">
                             <a href="javascript:void(0)" onclick="verAdjuntos(@item.Id)" title="Ver Adjuntos" class="btn btn-info btn-xs"><i class="fa fa-image"></i></a>
-                            @if (estadoId == 1)
+                            @if (estadoId == 1 || estadoId == 4)
                             {
                                 <a href="javascript:void(0)" onclick="editarSolicitud(@item.Id)" title="Editar" class="btn btn-primary btn-xs"><i class="fa fa-edit"></i></a>
                                 <a href="javascript:void(0)" onclick="aprobarSolicitud(@item.Id)" title="Aprobar y Asignar Tarjeta" class="btn btn-success btn-xs"><i class="fa fa-check"></i></a>
-                                <a href="javascript:void(0)" onclick="confirmarRechazar(event, '/Core/SolicitudDeTarjeta/Rechazar/@item.Id')" title="Rechazar Solicitud" class="btn btn-warning btn-xs"><i class="fa fa-times"></i></a>
-                                <a href="javascript:void(0)" onclick="confirmarEliminar(event, '/Core/SolicitudDeTarjeta/Delete/@item.Id')" title="Borrar" class="btn btn-danger btn-xs"><i class="fa fa-trash-o"></i></a>
+                                <a href="javascript:void(0)" onclick="confirmarNuevaRevision(event, '/Core/SolicitudDeTarjeta/NuevaRevision/@item.Id')" title="Solicitar Nueva Revisión" class="btn btn-warning btn-xs" style="background-color: #f39c12; border-color: #e08e0b;"><i class="fa fa-refresh"></i></a>
+                                <a href="javascript:void(0)" onclick="confirmarRechazar(event, '/Core/SolicitudDeTarjeta/Rechazar/@item.Id')" title="Rechazar Solicitud" class="btn btn-danger btn-xs"><i class="fa fa-times"></i></a>
+                                <a href="javascript:void(0)" onclick="confirmarEliminar(event, '/Core/SolicitudDeTarjeta/Delete/@item.Id')" title="Borrar" class="btn btn-default btn-xs" style="color: #dd4b39;"><i class="fa fa-trash-o"></i></a>
                             }
                         </td>
                     </tr>
@@ -104,12 +111,30 @@
         e.preventDefault();
         Swal.fire({
             title: "¿Desea rechazar esta solicitud?",
-            text: "Se enviará un correo informando al usuario que deberá acercarse personalmente a una sucursal.",
+            text: "Se enviará un correo informando que no cumple con los requisitos mínimos para dar el alta.",
             icon: "warning",
+            showCancelButton: true,
+            confirmButtonColor: "#dd4b39",
+            cancelButtonColor: "#3085d6",
+            confirmButtonText: "Sí, Rechazar",
+            cancelButtonText: "Cancelar"
+        }).then((result) => {
+            if (result.isConfirmed) {
+                window.location.href = url;
+            }
+        });
+    }
+
+    function confirmarNuevaRevision(e, url) {
+        e.preventDefault();
+        Swal.fire({
+            title: "¿Solicitar Nueva Revisión?",
+            text: "Se enviará un correo solicitando la documentación necesaria para validar la solicitud y se cambiará su estado a 'Nueva Revisión'.",
+            icon: "info",
             showCancelButton: true,
             confirmButtonColor: "#f39c12",
             cancelButtonColor: "#3085d6",
-            confirmButtonText: "Sí, Rechazar",
+            confirmButtonText: "Sí, Solicitar Revisión",
             cancelButtonText: "Cancelar"
         }).then((result) => {
             if (result.isConfirmed) {
@@ -139,7 +164,7 @@
     $(document).ready(function () {
         var table = $('#listadoSolicitudes').DataTable({
             "columnDefs": [
-                { "orderable": false, "searchable": false, "className": "text-center", "targets": 9 }
+                { "orderable": false, "searchable": false, "className": "text-center", "targets": [10, 11] }
             ],
             "language": {
                 'url': '@Url.Content("~/lib/arg.json")'
@@ -153,6 +178,7 @@
                             <option value="1">Pendiente</option>
                             <option value="2">Aprobada</option>
                             <option value="3">Rechazada</option>
+                            <option value="4">Nueva Revisión</option>
                         </select>
                     </label>
                 `;

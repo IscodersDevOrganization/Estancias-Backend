@@ -4,14 +4,16 @@ using DAL.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace DAL.Migrations
 {
     [DbContext(typeof(EstanciasContext))]
-    partial class EstanciasContextModelSnapshot : ModelSnapshot
+    [Migration("20261005204620_add-column-TelefonoSolicitarTarjeta")]
+    partial class addcolumnTelefonoSolicitarTarjeta
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1646,33 +1648,6 @@ namespace DAL.Migrations
                     b.HasIndex("ClienteId");
 
                     b.ToTable("HistorialDePuntos");
-                });
-
-            modelBuilder.Entity("DAL.Models.HistoricoDeCargaMorosos", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
-
-                    b.Property<int>("Cargados");
-
-                    b.Property<int>("Fallidos");
-
-                    b.Property<DateTime>("FechaCarga");
-
-                    b.Property<string>("Observacion");
-
-                    b.Property<int>("Omitidos");
-
-                    b.Property<int>("RegistrosTotales");
-
-                    b.Property<string>("UsuarioId");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UsuarioId");
-
-                    b.ToTable("HistoricoDeCargaMorosos");
                 });
 
             modelBuilder.Entity("DAL.Models.Horarios", b =>
@@ -3380,13 +3355,6 @@ namespace DAL.Migrations
                     b.HasOne("DAL.Models.Clientes", "Cliente")
                         .WithMany()
                         .HasForeignKey("ClienteId");
-                });
-
-            modelBuilder.Entity("DAL.Models.HistoricoDeCargaMorosos", b =>
-                {
-                    b.HasOne("DAL.Models.Usuario", "Usuario")
-                        .WithMany()
-                        .HasForeignKey("UsuarioId");
                 });
 
             modelBuilder.Entity("DAL.Models.Horarios", b =>

@@ -82,7 +82,8 @@ namespace EstanciasCore.Areas.Core.Controllers
                     Nombre = model.Nombre,
                     Apellido = model.Apellido,
                     DNI = model.DNI,
-                    Email = model.Email,
+                    Telefono = model.Telefono,
+                    Email = model.Email,                    
                     FechaNacimiento = model.FechaNacimiento,
                     Calle = model.Calle,
                     Altura = model.Altura,
@@ -130,6 +131,7 @@ namespace EstanciasCore.Areas.Core.Controllers
                 Nombre = entity.Nombre,
                 Apellido = entity.Apellido,
                 DNI = entity.DNI,
+                Telefono = entity.Telefono,
                 Email = entity.Email,
                 FechaNacimiento = entity.FechaNacimiento,
                 Calle = entity.Calle,
@@ -171,6 +173,7 @@ namespace EstanciasCore.Areas.Core.Controllers
                 entity.Nombre = model.Nombre;
                 entity.Apellido = model.Apellido;
                 entity.DNI = model.DNI;
+                entity.Telefono = model.Telefono;
                 entity.Email = model.Email;
                 entity.FechaNacimiento = model.FechaNacimiento;
                 entity.Calle = model.Calle;
@@ -332,9 +335,9 @@ namespace EstanciasCore.Areas.Core.Controllers
 
                             <h2>Información sobre tu Solicitud de Tarjeta</h2>
                             <p>Estimado/a <strong>{entity.Nombre} {entity.Apellido}</strong>,</p>
-                            <p>Queríamos avisarte que no pudimos validar tu gestión de manera online. Te recomendamos acercarte a nuestra sucursal más cercana para que podamos verificar tu caso nuevamente.</p>
-                            <p>Nuestro personal estará a disposición para resolver tu solicitud</p>
-                            <p>Muchas gracias,</p>
+                            <p>Lamentablemente no cumplís con los requisitos mínimos para dar el alta.</p>
+                            <p>Te recomendamos intentarlo en otro momento.</p>
+                            <p>Cualquier duda, podés consultar con tu sucursal más cercana.</p>
                             <p>Saludos,<br>
                             <strong>Equipo Textil del Campo</strong></p>
                             <hr>
@@ -344,7 +347,7 @@ namespace EstanciasCore.Areas.Core.Controllers
                     var mail = new MailAPI
                     {
                         Mail = entity.Email.Trim(),
-                        Titulo = "Novedades sobre tu Solicitud de Tarjeta - Estancias",
+                        Titulo = "Información sobre tu Solicitud de Tarjeta - Estancias",
                         Html = htmlBody
                     };
 
@@ -357,6 +360,81 @@ namespace EstanciasCore.Areas.Core.Controllers
                 }
 
                 TempData["Success"] = "La solicitud fue rechazada y se envió la notificación por correo electrónico.";
+            }
+            return RedirectToAction(nameof(Index));
+        }
+
+        // GET: Core/SolicitudDeTarjeta/NuevaRevision/5
+        public async Task<IActionResult> NuevaRevision(int id)
+        {
+            var entity = await _context.SolicitudDeTarjeta.FindAsync(id);
+            if (entity != null)
+            {
+                var estadoNuevaRev = await _context.EstadoSolicitudDeTarjeta.FirstOrDefaultAsync(e => e.Id == 4) 
+                                     ?? await _context.EstadoSolicitudDeTarjeta.FirstOrDefaultAsync(e => e.Nombre.Contains("Revisión"));
+
+                if (estadoNuevaRev == null)
+                {
+                    estadoNuevaRev = new EstadoSolicitudDeTarjeta { Id = 4, Nombre = "Nueva Revisión", Activo = true };
+                    _context.EstadoSolicitudDeTarjeta.Add(estadoNuevaRev);
+                    await _context.SaveChangesAsync();
+                }
+
+                entity.Estado = estadoNuevaRev;
+                entity.FechaDeRechazoAprobacion = DateTime.Now;
+
+                _context.Update(entity);
+                await _context.SaveChangesAsync();
+
+                // Enviar mail de nueva revisión solicitando documentación
+                try
+                {
+                    string htmlBody = $@"
+                        <div style='font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 600px;'>
+                            <table role='presentation' border='0' cellpadding='0' cellspacing='0' style='width: 100%; margin-bottom: 25px;'>
+                                <tr>
+                                    <td align='center' style='padding: 5px;'>
+                                        <img src='https://portalestancias.com.ar/images/logo-email.png' alt='Textil' style='width: 100%;height: auto; display: block;' />
+                                    </td>    
+                                </tr>
+                            </table>
+
+                            <h2>Información sobre tu Solicitud de Tarjeta</h2>
+                            <p>Estimado/a <strong>{entity.Nombre} {entity.Apellido}</strong>,</p>
+                            <p>No pudimos validar tu solicitud de manera online. Te pedimos por favor nos vuelvas a enviar la siguiente documentación a tarjetas@cpecreditos.com.ar:</p>
+                            <ul style='line-height: 1.8; margin-bottom: 15px;'>
+                                <li>Nombre y Apellido:</li>
+                                <li>Tipo y Número de Documento:</li>
+                                <li>Domicilio completo (Calle, Numeración, Localidad, Provincia, País y Código Postal):</li>
+                                <li>Email:</li>
+                                <li>Número de teléfono:</li>
+                                <li>Fecha de Nacimiento:</li>
+                                <li>Foto DNI Frente y Dorso y Selfie sosteniendo el documento:</li>
+                                <li>Algún servicio a tu nombre:</li>
+                            </ul>
+                            <p>Cualquier duda, podés consultar con tu sucursal más cercana.</p>
+                            <p>Saludos,<br>
+                            <strong>Equipo Textil del Campo</strong></p>
+                            <hr>
+                            <small>Este es un correo automático, por favor no responder a este mensaje.</small>
+                        </div>";
+
+                    var mail = new MailAPI
+                    {
+                        Mail = entity.Email.Trim(),
+                        Titulo = "Información sobre tu Solicitud de Tarjeta - Estancias",
+                        Html = htmlBody
+                    };
+
+                    await _mailService.EnviarAsync(mail);
+                }
+                catch (Exception ex)
+                {
+                    TempData["Error"] = $"La solicitud fue puesta en Nueva Revisión, pero ocurrió un error al enviar el email: {ex.Message}";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                TempData["Success"] = "La solicitud fue puesta en Nueva Revisión y se envió la notificación por correo electrónico.";
             }
             return RedirectToAction(nameof(Index));
         }
@@ -378,11 +456,11 @@ namespace EstanciasCore.Areas.Core.Controllers
         public async Task<IActionResult> ObtenerCantidadPendientes()
         {
             var cantidad = await _context.SolicitudDeTarjeta
-                .Where(s => s.Estado == null || s.Estado.Id == 1)
+                .Where(s => s.Estado == null || s.Estado.Id == 1 || s.Estado.Id == 4)
                 .CountAsync();
 
             var ultimas = await _context.SolicitudDeTarjeta
-                .Where(s => s.Estado == null || s.Estado.Id == 1)
+                .Where(s => s.Estado == null || s.Estado.Id == 1 || s.Estado.Id == 4)
                 .OrderByDescending(s => s.FechaSolicitud)
                 .Take(5)
                 .Select(s => new

@@ -79,6 +79,10 @@ namespace EstanciasCore.Areas.Core.Controllers
                 };
 
                 _context.Add(entity);
+                if (categoriaObj != null)
+                {
+                    await ActualizarCategoriaUsuarioExistente(model.DNI, categoriaObj);
+                }
                 await _context.SaveChangesAsync();
                 return RedirectToAction(nameof(Index));
             }
@@ -148,6 +152,10 @@ namespace EstanciasCore.Areas.Core.Controllers
                 try
                 {
                     _context.Update(entity);
+                    if (categoriaObj != null)
+                    {
+                        await ActualizarCategoriaUsuarioExistente(model.DNI, categoriaObj);
+                    }
                     await _context.SaveChangesAsync();
                 }
                 catch (DbUpdateConcurrencyException)
@@ -359,7 +367,33 @@ namespace EstanciasCore.Areas.Core.Controllers
                 _context.Add(newRecord);
             }
 
+            if (categoriaObj != null)
+            {
+                await ActualizarCategoriaUsuarioExistente(dni, categoriaObj);
+            }
+
             await _context.SaveChangesAsync();
+        }
+
+        private async Task ActualizarCategoriaUsuarioExistente(string dni, UsuariosCategorias categoriaObj)
+        {
+            if (string.IsNullOrWhiteSpace(dni) || categoriaObj == null)
+            {
+                return;
+            }
+
+            var dniTrimmed = dni.Trim();
+            var usuariosExistentes = await _context.Usuarios
+                .Include(u => u.Personas)
+                .Include(u => u.UsuariosCategorias)
+                .Where(u => u.Personas != null && u.Personas.NroDocumento != null && u.Personas.NroDocumento.Trim() == dniTrimmed)
+                .ToListAsync();
+
+            foreach (var usuario in usuariosExistentes)
+            {
+                usuario.UsuariosCategorias = categoriaObj;
+                _context.Usuarios.Update(usuario);
+            }
         }
     }
 }

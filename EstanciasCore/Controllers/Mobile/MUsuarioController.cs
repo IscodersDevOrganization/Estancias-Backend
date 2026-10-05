@@ -356,6 +356,8 @@ namespace EstanciasCore.Controllers
             };
             user.Clientes = nuevocliente;
             _context.Clientes.Add(nuevocliente);
+            string dniConsultaPersona = nuevocliente.Persona?.NroDocumento ?? (Registro.NumeroDocumento != 0 ? Registro.NumeroDocumento.ToString() : "");
+            VerificarYSetearMoroso(user, dniConsultaPersona);
             _context.Usuarios.Update(user);
             _context.SaveChanges();
 
@@ -1556,15 +1558,8 @@ namespace EstanciasCore.Controllers
                         user.UsuariosCategorias = _context.UsuariosCategorias.Where(x => x.Id==5).FirstOrDefault();
                     }
 
-                    var moroso = _context.Morosos.Where(x => x.DNI == user.Personas.NroDocumento).FirstOrDefault();
-                    if (moroso != null)
-                    {
-                        user.Incobrable = true;
-                    }
-                    else
-                    {
-                        user.Incobrable = false;
-                    }
+                    string dniMorosoConsulta = user.Personas?.NroDocumento ?? (Registro.NumeroDocumento != 0 ? Registro.NumeroDocumento.ToString() : "");
+                    VerificarYSetearMoroso(user, dniMorosoConsulta);
                     _context.Usuarios.Update(user);
                     _context.SaveChanges();
                     Registro.Status = 200;
@@ -2070,9 +2065,15 @@ namespace EstanciasCore.Controllers
                 uat.Mensaje = "Error al buscar los datos Personales";
                 return uat;
             }
-
         }
 
+        private void VerificarYSetearMoroso(Usuario user, string dni)
+        {
+            if (user == null || string.IsNullOrWhiteSpace(dni)) return;
+            var dniTrimmed = dni.Trim();
+            bool esMoroso = _context.Morosos.Any(m => m.DNI != null && m.DNI.Trim() == dniTrimmed);
+            user.Incobrable = esMoroso;
+        }
 
     }
 }

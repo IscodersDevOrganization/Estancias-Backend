@@ -1,4 +1,4 @@
-﻿using DAL.Models.Core;
+using DAL.Models.Core;
 using DAL.Models;
 using System;
 using System.Collections.Generic;
@@ -30,8 +30,8 @@ namespace DAL.DTOs
         public string NroTarjeta { get; set; }
         public string FechaDePago { get; set; }
         public string FechaVencimiento { get; set; }
-        public string MontoAdeudado { get; set; }
-        public string MontoInformado { get; set; }
+        public decimal MontoAdeudado { get; set; }
+        public decimal MontoInformado { get; set; }
         public string FechaPagoProximaCuota { get; set; }
         public string FechaComprobante { get; set; }
         public string EstadoPago { get; set; }

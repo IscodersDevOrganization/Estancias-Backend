@@ -131,13 +131,9 @@ namespace EstanciasCore.Endpoints
                         ? p.Persona.NroTarjeta
                         : "---",
 
-                    MontoAdeudado = p.MontoAdeudado
-                        .ToString()
-                        .Replace(".", ","),
+                    MontoAdeudado = p.MontoAdeudado,
 
-                    MontoInformado = p.MontoInformado
-                        .ToString()
-                        .Replace(".", ","),
+                    MontoInformado = p.MontoInformado,
 
                     FechaVencimiento = p.FechaVencimiento.HasValue
                         ? p.FechaVencimiento.Value

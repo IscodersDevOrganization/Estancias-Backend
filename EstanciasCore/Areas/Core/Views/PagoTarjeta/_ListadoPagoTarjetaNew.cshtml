@@ -1,4 +1,4 @@
-﻿@using DAL.Models.Core;
+@using DAL.Models.Core;
 
 
 
@@ -94,7 +94,19 @@
                 { data: "NroDocumento", title: "NroDocumento" },
                 { data: "FechaDePago", title: "Fecha Informada" },
                 { data: "FechaComprobante", title: "Fecha de Carga" },
-                { data: "MontoInformado", title: "Monto Informado" },
+                {
+                    data: "MontoInformado",
+                    title: "Monto Informado",
+                    render: function (data, type, row) {
+                        if (type === 'display' || type === 'filter') {
+                            if (data === null || data === undefined) return '0,00';
+                            var val = parseFloat(data);
+                            if (isNaN(val)) return data;
+                            return val.toFixed(2).replace('.', ',');
+                        }
+                        return data;
+                    }
+                },
                 {
                     "title": "EstadoPago",
                     class: "text-center",

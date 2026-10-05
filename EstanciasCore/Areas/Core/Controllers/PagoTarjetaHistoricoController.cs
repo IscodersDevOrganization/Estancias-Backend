@@ -1,4 +1,4 @@
-﻿using Commons.Models;
+using Commons.Models;
 using DAL.Data;
 using DAL.DTOs;
 using DAL.Mobile;
@@ -56,8 +56,8 @@ namespace EstanciasCore.Controllers
                             NroDocumento =(p.Persona!=null) ? p.Persona.NroDocumento : "---",
                             Usuario = (p.Persona!=null) ? p.Persona.Email : "---",
                             NroTarjeta =(p.Persona!=null) ? p.Persona.NroTarjeta : "---",
-                            MontoAdeudado = p.MontoAdeudado.ToString().Replace(".", ","),
-                            MontoInformado = p.MontoInformado.ToString().Replace(".", ","),
+                            MontoAdeudado = p.MontoAdeudado,
+                            MontoInformado = p.MontoInformado,
                             FechaVencimiento = (p.FechaVencimiento ?? DateTime.MinValue).ToString("dd/MM/yyyy"),
                             FechaComprobante = (p.FechaComprobante ?? DateTime.MinValue).ToString("dd/MM/yyyy"),
                             EstadoPago = p.EstadoPago.ToString(),

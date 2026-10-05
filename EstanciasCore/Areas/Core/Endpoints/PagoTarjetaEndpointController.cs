@@ -1,4 +1,4 @@
-﻿using DAL.Data;
+using DAL.Data;
 using DAL.DTOs;
 using DAL.DTOs.Reportes;
 using DAL.Models;
@@ -124,9 +124,9 @@ namespace EstanciasCore.Endpoints
                         ? p.FechaVencimiento.Value.ToString("dd/MM/yyyy")
                         : "",
 
-                    MontoAdeudado = p.MontoAdeudado.ToString(),
+                    MontoAdeudado = p.MontoAdeudado,
 
-                    MontoInformado = p.MontoInformado.ToString(),
+                    MontoInformado = p.MontoInformado,
 
                     FechaPagoProximaCuota = p.FechaPagoProximaCuota.HasValue
                         ? p.FechaPagoProximaCuota.Value.ToString("dd/MM/yyyy")

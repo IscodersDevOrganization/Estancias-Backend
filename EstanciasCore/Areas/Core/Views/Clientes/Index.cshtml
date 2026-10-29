@@ -1,4 +1,4 @@
-﻿@using Commons.HtmlHelpers
+@using Commons.HtmlHelpers
 @{
     ViewData["Title"] = "Clientes";
 }
@@ -55,6 +55,7 @@ $(function () {
     var table = $('#ClienteDataTable').DataTable({
                 serverSide: true,
                 processing: true,
+                order: [[0, "desc"]],
                  "language": {
                     'url': '@Url.Content("~/lib/arg.json")'
                 },
@@ -64,7 +65,8 @@ $(function () {
                     },
                 rowId: 'Id',
                 columns: [
-                    { data: "Tipo", title: "Tipo Cliente"},
+                    { data: "Id", title: "Id", visible: false },
+                    { data: "Tipo", title: "Tipo Cliente", visible: false },
                     { data: "NombreCompleto", title: "Nombre Completo"},
                     { data: "CUIL", title: "CUIL"},
                     { data: "RazonSocial", title: "Razon Social"},

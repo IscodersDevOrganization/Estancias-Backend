@@ -1,50 +1,51 @@
-﻿@using Commons.Identity.Extensions
+@using Commons.Identity.Extensions
 @using Commons.Identity.Services
 @inject SignInService<Usuario> SignInManager
 
 @if (SignInManager.IsSignedIn(User))
 {
-    <li class="dropdown user user-menu">
-        <!-- Menu Toggle Button -->
-        <a href="#" class="dropdown-toggle" data-toggle="dropdown">
-            <!-- The user image in the navbar-->
-            <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTRxQ-XnyKmKP11SQacp2IutD8Njt89ze2EIIN9AAtrEP5g83jI" class="user-image" alt="ui">
-            <!-- hidden-xs hides the username on small devices so only the image appears. -->
-            <span class="hidden-xs">@User.GetUserName()</span>
+    var userName = User.Identity != null ? User.Identity.Name : "admin@admin.com";
+    var userNick = User.GetUserName();
+    var displayName = !string.IsNullOrEmpty(userNick) ? userNick : (userName == "admin@admin.com" ? "Super Admin" : userName);
+    var initials = "SA";
+    if (!string.IsNullOrEmpty(displayName))
+    {
+        var parts = displayName.Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2 && parts[0].Length > 0 && parts[1].Length > 0)
+        {
+            initials = ("" + parts[0][0] + parts[1][0]).ToUpper();
+        }
+        else if (displayName.Length >= 2)
+        {
+            initials = displayName.Substring(0, 2).ToUpper();
+        }
+    }
+
+    <li class="dropdown user user-menu modern-user-menu">
+        <a href="#" class="dropdown-toggle modern-user-toggle" data-toggle="dropdown">
+            <div class="user-info-text hidden-xs">
+                <span class="user-name">@displayName</span>
+                <span class="user-email">@userName</span>
+            </div>
+            <div class="user-avatar-badge">@initials</div>
         </a>
 
-        <ul class="dropdown-menu">
-            <!-- The user image in the menu -->
-            <li class="user-header">
-                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTRxQ-XnyKmKP11SQacp2IutD8Njt89ze2EIIN9AAtrEP5g83jI" class="img-circle" alt="User Image" />
-                <p>
-                    <small>@User.GetProfileTypeString() - @User.Identity.Name</small>
-                </p>
+        <ul class="dropdown-menu modern-dropdown-menu">
+            <li class="user-header-modern">
+                <div class="user-avatar-badge-lg">@initials</div>
+                <div class="user-header-details">
+                    <span class="user-name-lg">@displayName</span>
+                    <span class="user-email-lg">@userName</span>
+                </div>
             </li>
-            <!-- Menu Body -->
-            @*<li class="user-body">
-                    <div class="row">
-                        <div class="col-xs-4 text-center">
-                            <a href="#">Followers</a>
-                        </div>
-                        <div class="col-xs-4 text-center">
-                            <a href="#">Sales</a>
-                        </div>
-                        <div class="col-xs-4 text-center">
-                            <a href="#">Friends</a>
-                        </div>
-                    </div>
-                </li>*@
-            <!-- Menu Footer-->
-            <li class="user-footer">
-                <div class="pull-left">
-                    <a href="#" class="btn btn-default btn-flat">Perfil</a>
-                </div>
-                <div class="pull-right">
-                    <form asp-area="Identity" asp-page="/Account/Logout" asp-route-returnUrl="/Home/Index" method="post" id="logoutForm">
-                        <a href="javascript:document.getElementById('logoutForm').submit()" class="btn btn-default btn-flat">Salir</a>
-                    </form>
-                </div>
+            <li class="divider"></li>
+            <li><a href="#"><i class="fa fa-user-o"></i> Mi Perfil</a></li>
+            <li><a href="#"><i class="fa fa-cog"></i> Configuración</a></li>
+            <li class="divider"></li>
+            <li>
+                <form asp-area="Identity" asp-page="/Account/Logout" asp-route-returnUrl="/Home/Index" method="post" id="logoutForm" style="margin: 0;">
+                    <a href="javascript:document.getElementById('logoutForm').submit()" class="text-danger"><i class="fa fa-sign-out"></i> Cerrar Sesión</a>
+                </form>
             </li>
         </ul>
     </li>
@@ -53,7 +54,7 @@ else
 {
     <li>
         <ul class="nav navbar-nav navbar-right" style="margin-right:0px;">
-            <li><a asp-area="Identity" asp-page="/Account/Login">Iniciar sesion</a></li>
+            <li><a asp-area="Identity" asp-page="/Account/Login" class="btn-modern btn-modern-primary" style="margin-top: 12px;">Iniciar sesión</a></li>
         </ul>
     </li>
 }

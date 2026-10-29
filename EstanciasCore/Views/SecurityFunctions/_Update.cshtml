@@ -1,134 +1,503 @@
-@using Commons.HtmlHelpers
+@using Commons.Identity
 @model Commons.Identity.CommonsFunction
 @{
     ViewData["Title"] = "Editar Función: " + Model.Name;
-    var routeGroups = ViewBag.RouteGroups as List<EstanciasCore.Controllers.SecurityFunctionsController.RouteGroup> ?? new List<EstanciasCore.Controllers.SecurityFunctionsController.RouteGroup>();
-    var allRoutesFlat = ViewBag.AllRoutesFlat as List<string> ?? new List<string>();
+    var rawRouteGroups = ViewBag.RouteGroups as List<EstanciasCore.Controllers.SecurityFunctionsController.RouteGroup> ?? new List<EstanciasCore.Controllers.SecurityFunctionsController.RouteGroup>();
     var selectedRoutes = ViewBag.SelectedRoutes as List<string> ?? new List<string>();
+
+    var routeGroups = rawRouteGroups
+        .Select(g => new {
+            ControllerName = string.IsNullOrEmpty(g?.ControllerName) ? "Otros" : g.ControllerName,
+            AreaName = g?.AreaName ?? "",
+            Routes = g?.Routes ?? new List<string>()
+        })
+        .OrderBy(g => g.AreaName)
+        .ThenBy(g => g.ControllerName)
+        .ToList();
+
+    var initialCat1 = "";
+    var initialCat2 = "";
+    var initialCat3 = "";
+    var initialCleanDesc = Model.Description ?? "";
+
+    if (!string.IsNullOrEmpty(Model.Description) && Model.Description.StartsWith("[") && Model.Description.Contains("]"))
+    {
+        var closingIdx = Model.Description.IndexOf("]");
+        var bracketContent = Model.Description.Substring(1, closingIdx - 1);
+        initialCleanDesc = Model.Description.Substring(closingIdx + 1).Trim();
+
+        var parts = bracketContent.Split(new[] { '>', '/', '|' }, StringSplitOptions.RemoveEmptyEntries)
+                                  .Select(p => p.Trim())
+                                  .ToArray();
+        if (parts.Length > 0) { initialCat1 = parts[0]; }
+        if (parts.Length > 1) { initialCat2 = parts[1]; }
+        if (parts.Length > 2) { initialCat3 = parts[2]; }
+    }
 }
-<div class="row">
-    <div class="col-md-12">
-        <form asp-action="_Update" asp-controller="SecurityFunctions">
-            @using (Html.BoxDefault(BoxColor.Info))
+
+<style>
+    .func-modal-container {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        color: #1e293b;
+        padding: 4px;
+    }
+
+    .func-modal-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .func-header-left {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+
+    .func-shield-badge {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: #eff6ff;
+        border: 1px solid #dbeafe;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #2563eb;
+        font-size: 20px;
+        flex-shrink: 0;
+    }
+
+    .func-header-titles h3 {
+        font-size: 18px;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0;
+        line-height: 1.25;
+    }
+
+    .func-header-titles p {
+        font-size: 12.5px;
+        color: #64748b;
+        margin: 2px 0 0 0;
+    }
+
+    .func-close-btn {
+        background: transparent;
+        border: none;
+        font-size: 24px;
+        line-height: 1;
+        color: #94a3b8;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 6px;
+        transition: all 0.15s ease;
+    }
+
+    .func-close-btn:hover {
+        color: #0f172a;
+        background: #f1f5f9;
+    }
+
+    /* Fast Controller Selector Banner */
+    .func-quick-card {
+        background: #f0fdf4;
+        border: 1.5px solid #bbf7d0;
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin-bottom: 18px;
+    }
+
+    .func-quick-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+    }
+
+    .func-quick-title {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        color: #166534;
+        text-transform: uppercase;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    /* 3-Level Categories Card (Free Text) */
+    .func-cat-card {
+        background: #f8fafc;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin-bottom: 18px;
+    }
+
+    .func-cat-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+    }
+
+    .func-cat-title {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        color: #334155;
+        text-transform: uppercase;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .func-cat-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+    }
+
+    @@media (max-width: 768px) {
+        .func-cat-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .func-cat-col label {
+        display: block;
+        font-size: 11px;
+        font-weight: 600;
+        color: #475569;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+
+    .func-cat-preview {
+        margin-top: 10px;
+        font-size: 11.5px;
+        color: #64748b;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: #ffffff;
+        padding: 6px 12px;
+        border-radius: 6px;
+        border: 1px dashed #cbd5e1;
+    }
+
+    .func-field-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+
+    @@media (max-width: 768px) {
+        .func-field-row {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .func-form-field {
+        margin-bottom: 16px;
+    }
+
+    .func-form-field label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        color: #334155;
+        margin-bottom: 6px;
+    }
+
+    .func-form-field input,
+    .func-form-field textarea,
+    .func-form-field select,
+    .func-cat-col input {
+        border-radius: 8px !important;
+        border: 1px solid #cbd5e1 !important;
+        padding: 7px 12px !important;
+        font-size: 12.5px !important;
+        box-shadow: none !important;
+        color: #1e293b !important;
+        background: #ffffff !important;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .func-form-field input:focus,
+    .func-form-field textarea:focus,
+    .func-form-field select:focus,
+    .func-cat-col input:focus {
+        border-color: #3c8dbc !important;
+        box-shadow: 0 0 0 3px rgba(60, 141, 188, 0.15) !important;
+        outline: none !important;
+    }
+
+    .func-modal-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-top: 16px;
+        border-top: 1px solid #f1f5f9;
+        margin-top: 16px;
+    }
+
+    .func-footer-count {
+        font-size: 12.5px;
+        color: #64748b;
+    }
+
+    .func-footer-count strong {
+        color: #0f172a;
+        font-weight: 700;
+    }
+
+    .func-footer-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .func-footer-actions .btn {
+        border-radius: 3px !important;
+        font-weight: 500 !important;
+        font-size: 12px !important;
+        line-height: 1.5 !important;
+        padding: 6px 18px !important;
+    }
+</style>
+
+<div class="func-modal-container" id="updateFunctionRoot">
+    <form asp-action="_Update" asp-controller="SecurityFunctions" method="post" id="formUpdateFunction" onsubmit="return prepareFunctionSubmitUpdate();">
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+        <input type="hidden" asp-for="Id" />
+        <input type="hidden" asp-for="Show" />
+        <input type="hidden" asp-for="Display" />
+        <input type="hidden" name="Description" id="finalDescriptionInputUpdate" />
+
+        <!-- Container for routes (pre-loaded + any new controller selected) -->
+        <div id="hiddenRoutesContainerUpdate">
+            @foreach (var r in selectedRoutes)
             {
-                using (Html.BoxHeader("Información de la Función")) { }
-                using (Html.BoxBody())
-                {
-                    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-                    <input type="hidden" asp-for="Id" />
-                    
-                    <div class="form-group">
-                        <label asp-for="Name" class="control-label">Nombre de Función</label>
-                        <input asp-for="Name" class="form-control" required />
-                        <span asp-validation-for="Name" class="text-danger"></span>
-                    </div>
-
-                    <div class="form-group">
-                        <label asp-for="Description" class="control-label">Descripción</label>
-                        <textarea asp-for="Description" class="form-control" rows="3"></textarea>
-                        <span asp-validation-for="Description" class="text-danger"></span>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="control-label">Rutas Habilitadas</label>
-                        
-                        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                            <div style="flex-grow: 1;">
-                                <input type="text" id="routeFilterUpdate" class="form-control" placeholder="Buscar / filtrar por controlador o ruta..." />
-                            </div>
-                        </div>
-
-                        <div style="max-height: 350px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; border-radius: 4px; background-color: #ffffff;" id="routesContainerUpdate">
-
-                            @if (routeGroups.Count == 0)
-                            {
-                                <div class="text-muted">No se encontraron rutas activas en la aplicación.</div>
-                            }
-                            else
-                            {
-                                foreach (var group in routeGroups)
-                                {
-                                    var groupHeaderId = $"group_{group.AreaName}_{group.ControllerName}".Replace(".", "_");
-                                    var areaText = !string.IsNullOrEmpty(group.AreaName) ? $"[{group.AreaName}] " : "";
-                                    
-                                    <div class="controller-group" style="margin-bottom: 15px; border-bottom: 1px solid #f4f4f4; padding-bottom: 8px;">
-                                        <div style="display: flex; align-items: center; justify-content: space-between; background-color: #f9f9f9; padding: 4px 8px; border-radius: 3px; border-left: 3px solid #3c8dbc;">
-                                            <h5 style="margin: 0; font-size: 1.05em;"><strong>@areaText@group.ControllerName</strong></h5>
-                                            <label style="margin: 0; font-weight: normal; cursor: pointer; font-size: 0.9em;">
-                                                <input type="checkbox" class="select-all-controller" data-target="@groupHeaderId" /> Seleccionar Todo
-                                            </label>
-                                        </div>
-                                        
-                                        <div id="@groupHeaderId" class="controller-routes" style="padding-left: 15px; margin-top: 5px;">
-                                            @foreach (var route in group.Routes)
-                                            {
-                                                var isChecked = selectedRoutes.Contains(route) ? "checked" : "";
-                                                <div class="checkbox route-item-update" style="margin-top: 5px; margin-bottom: 5px;">
-                                                    <label style="width: 100%; cursor: pointer; font-size: 0.95em;">
-                                                        <input type="checkbox" name="selectedRoutes" class="individual-route" value="@route" @isChecked />
-                                                        <span class="route-path-update">@route</span>
-                                                    </label>
-                                                </div>
-                                            }
-                                        </div>
-                                    </div>
-                                }
-                            }
-                        </div>
-                    </div>
-
-                    <input type="hidden" asp-for="Display" />
-                    <input type="hidden" asp-for="Show" />
-                }
-                using (Html.BoxFooter())
-                {
-                    <a asp-action="Index" class="btn btn-default">Cancelar</a>
-                    <input type="submit" value="Guardar" class="btn btn-primary pull-right" />
-                }
+                <input type="hidden" name="selectedRoutes" value="@r" />
             }
-        </form>
-    </div>
+        </div>
+
+        <!-- Header -->
+        <div class="func-modal-header">
+            <div class="func-header-left">
+                <div class="func-shield-badge">
+                    <i class="fa fa-pencil"></i>
+                </div>
+                <div class="func-header-titles">
+                    <h3>Editar Función: @Model.Name</h3>
+                    <p>Modifique el nombre, la clasificación de 3 niveles o reasigne un nuevo controlador completo.</p>
+                </div>
+            </div>
+            <button type="button" class="func-close-btn" data-dismiss="modal" title="Cerrar">&times;</button>
+        </div>
+
+        <!-- 1. Quick Full Controller Reassigner -->
+        <div class="func-quick-card">
+            <div class="func-quick-header">
+                <span class="func-quick-title">
+                    <i class="fa fa-bolt text-success"></i> REASIGNAR CONTROLADOR COMPLETO (OPCIONAL):
+                </span>
+                <span id="ctrlSelectedCountBadgeUpdate" class="badge-pill badge-pill-green" style="display: none;"></span>
+            </div>
+            <select id="quickControllerPickerUpdate" class="form-control" onchange="onQuickControllerChangedUpdate(this)">
+                <option value="">-- Mantener rutas actuales o elegir un Controlador para reemplazarlas --</option>
+                @foreach (var g in routeGroups)
+                {
+                    var ctrl = g.ControllerName ?? "Otros";
+                    var areaPrefix = !string.IsNullOrEmpty(g.AreaName) ? $"[{g.AreaName}] " : "";
+                    var routesJson = Newtonsoft.Json.JsonConvert.SerializeObject(g.Routes);
+                    <option value="@ctrl" data-controller="@ctrl" data-area="@g.AreaName" data-count="@g.Routes.Count" data-routes='@routesJson'>
+                        @areaPrefix@ctrl (@g.Routes.Count rutas disponibles)
+                    </option>
+                }
+            </select>
+        </div>
+
+        <!-- 2. Hierarchical Classification (3 Levels: Free Text) -->
+        <div class="func-cat-card">
+            <div class="func-cat-header">
+                <span class="func-cat-title">
+                    <i class="fa fa-folder-open text-primary"></i> CLASIFICACIÓN (CATEGORÍA Y SUBCATEGORÍAS - TEXTO LIBRE):
+                </span>
+            </div>
+            <div class="func-cat-grid">
+                <div class="func-cat-col">
+                    <label>1. Categoría Principal</label>
+                    <input type="text" id="cat1InputUpdate" list="cat1DatalistUpdate" value="@initialCat1" class="form-control" placeholder="Ej: Gestión Operativa" oninput="updateCategoryPreviewUpdate()" />
+                    <datalist id="cat1DatalistUpdate">
+                        <option value="Gestión Operativa" />
+                        <option value="Datos Maestros" />
+                        <option value="Reportes & Estadísticas" />
+                        <option value="Sistema & Seguridad" />
+                    </datalist>
+                </div>
+                <div class="func-cat-col">
+                    <label>2. Subcategoría</label>
+                    <input type="text" id="cat2InputUpdate" list="cat2DatalistUpdate" value="@initialCat2" class="form-control" placeholder="Ej: Clientes y Cuentas" oninput="updateCategoryPreviewUpdate()" />
+                    <datalist id="cat2DatalistUpdate">
+                        <option value="Clientes y Cuentas" />
+                        <option value="Cobranzas y Tarjetas" />
+                        <option value="Cupones y Fidelización" />
+                        <option value="Marketing y Banners" />
+                        <option value="Ventas y Vendedores" />
+                        <option value="Catálogo y Artículos" />
+                        <option value="Sucursales y Puntos de Venta" />
+                        <option value="Empresas y Grupos" />
+                        <option value="Proveedores y Rubros" />
+                        <option value="Marcas Comerciales" />
+                        <option value="Billetera y Movimientos" />
+                        <option value="Conceptos y Contabilidad" />
+                        <option value="Gestión de Usuarios" />
+                        <option value="Perfiles y Roles" />
+                    </datalist>
+                </div>
+                <div class="func-cat-col">
+                    <label>3. Subcategoría Detalle</label>
+                    <input type="text" id="cat3InputUpdate" list="cat3DatalistUpdate" value="@initialCat3" class="form-control" placeholder="Ej: Acceso Completo" oninput="updateCategoryPreviewUpdate()" />
+                    <datalist id="cat3DatalistUpdate">
+                        <option value="Acceso Completo" />
+                        <option value="Consultas y Listados" />
+                        <option value="Altas y Creación" />
+                        <option value="Edición y Modificación" />
+                        <option value="Bajas y Eliminación" />
+                        <option value="Reportes y Exportación" />
+                        <option value="Operaciones Especiales" />
+                    </datalist>
+                </div>
+            </div>
+            <div class="func-cat-preview">
+                <i class="fa fa-tags text-primary"></i>
+                <span>Etiqueta: <strong id="lblCatPreviewUpdate" style="color: #0f172a;">[Sin categoría asignada]</strong></span>
+            </div>
+        </div>
+
+        <!-- 3. Form Name & Description -->
+        <div class="func-field-row">
+            <div class="func-form-field">
+                <label asp-for="Name">Nombre de la Función</label>
+                <input asp-for="Name" id="functionNameInputUpdate" class="form-control" required placeholder="Ej: Clientes o Sucursales" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+            <div class="func-form-field">
+                <label>Descripción del Permiso</label>
+                <input type="text" id="userDescriptionInputUpdate" value="@initialCleanDesc" class="form-control" placeholder="Ej: Control de acceso completo a las operaciones del módulo" />
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="func-modal-footer">
+            <div class="func-footer-count">
+                <span id="lblRoutesStatusUpdate"><strong id="lblRoutesFooterCountUpdate">@selectedRoutes.Count</strong> ruta(s) asociadas a esta función</span>
+            </div>
+            <div class="func-footer-actions">
+                <button type="button" class="btn btn-default btn-sm" data-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary btn-sm">Guardar Cambios</button>
+            </div>
+        </div>
+    </form>
 </div>
 
 <script>
-    $(document).ready(function () {
-
-
-        // Seleccionar todo en un controlador
-        $('.select-all-controller').off('change').on('change', function () {
-            var targetId = $(this).data('target');
-            var isChecked = $(this).prop('checked');
-            $('#' + targetId).find('.individual-route').prop('checked', isChecked);
-        });
-
-        // Filtrar controladores y rutas
-        $('#routeFilterUpdate').off('keyup').on('keyup', function () {
-            var query = $(this).val().toLowerCase();
-            $('.controller-group').each(function () {
-                var controllerText = $(this).find('h5').text().toLowerCase();
-                var hasVisibleRoute = false;
-                
-                $(this).find('.route-item-update').each(function () {
-                    var routeText = $(this).find('.route-path-update').text().toLowerCase();
-                    if (routeText.indexOf(query) > -1 || controllerText.indexOf(query) > -1) {
-                        $(this).show();
-                        hasVisibleRoute = true;
-                    } else {
-                        $(this).hide();
-                    }
-                });
-                
-                if (hasVisibleRoute || controllerText.indexOf(query) > -1) {
-                    $(this).show();
-                    if (controllerText.indexOf(query) > -1) {
-                        $(this).find('.route-item-update').show();
-                    }
-                } else {
-                    $(this).hide();
-                }
+    $(function () {
+        var $modal = $('#updateFunctionRoot').closest('.modal');
+        if ($modal.length > 0) {
+            $modal.find('.modal-header').hide();
+            $modal.find('.modal-footer').hide();
+            $modal.find('.modal-dialog').css({
+                'max-width': '780px',
+                'width': '92%',
+                'margin': '30px auto'
             });
+            $modal.find('.modal-body').css({
+                'padding': '24px 28px',
+                'background': '#ffffff',
+                'border-radius': '14px'
+            });
+            $modal.find('.modal-content').css({
+                'border-radius': '14px',
+                'border': '1px solid #e2e8f0',
+                'box-shadow': '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+            });
+        }
+
+        updateCategoryPreviewUpdate();
+    });
+
+    function onQuickControllerChangedUpdate(selectElem) {
+        var $sel = $(selectElem);
+        var ctrlName = $sel.val();
+        if (!ctrlName) {
+            return;
+        }
+
+        var $opt = $sel.find('option:selected');
+        var routes = [];
+        try {
+            routes = JSON.parse($opt.attr('data-routes') || '[]');
+        } catch (e) {
+            routes = [];
+        }
+
+        var $container = $('#hiddenRoutesContainerUpdate');
+        $container.empty();
+        $.each(routes, function (i, r) {
+            $container.append($('<input type="hidden" name="selectedRoutes" />').val(r));
         });
 
+        $('#lblRoutesFooterCountUpdate').text(routes.length);
+        $('#ctrlSelectedCountBadgeUpdate').html('<i class="fa fa-check"></i> ' + routes.length + ' rutas asignadas').show();
+    }
 
-    });
+    function updateCategoryPreviewUpdate() {
+        var c1 = ($('#cat1InputUpdate').val() || '').trim();
+        var c2 = ($('#cat2InputUpdate').val() || '').trim();
+        var c3 = ($('#cat3InputUpdate').val() || '').trim();
+
+        var tags = [];
+        if (c1) tags.push(c1);
+        if (c2) tags.push(c2);
+        if (c3) tags.push(c3);
+
+        if (tags.length > 0) {
+            $('#lblCatPreviewUpdate').text('[' + tags.join(' > ') + ']');
+        } else {
+            $('#lblCatPreviewUpdate').text('[Sin categoría asignada]');
+        }
+    }
+
+    function prepareFunctionSubmitUpdate() {
+        var c1 = ($('#cat1InputUpdate').val() || '').trim();
+        var c2 = ($('#cat2InputUpdate').val() || '').trim();
+        var c3 = ($('#cat3InputUpdate').val() || '').trim();
+        var userDesc = ($('#userDescriptionInputUpdate').val() || '').trim();
+
+        var tags = [];
+        if (c1) tags.push(c1);
+        if (c2) tags.push(c2);
+        if (c3) tags.push(c3);
+
+        var tagStr = tags.length > 0 ? '[' + tags.join(' > ') + ']' : '';
+        var finalDesc = tagStr + (userDesc ? (tagStr ? ' ' : '') + userDesc : '');
+        $('#finalDescriptionInputUpdate').val(finalDesc);
+
+        var selectedCount = $('#hiddenRoutesContainerUpdate input[name="selectedRoutes"]').length;
+        if (selectedCount === 0) {
+            alert('Por favor, asigne al menos una ruta a esta función.');
+            return false;
+        }
+
+        return true;
+    }
 </script>

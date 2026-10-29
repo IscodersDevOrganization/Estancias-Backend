@@ -4,45 +4,266 @@
     ViewData["BackArrow"] = "/Home/Index";
 }
 
-<div class="row">
-    <div class="col-md-6">
-        <div class="box box-info">
-            <div class="box-header with-border">
-                <h3 class="box-title">Buscar por Cupón</h3>
+<style>
+    .content-header {
+        display: none !important;
+    }
+
+    /* Contenedor a ancho completo */
+    .cupon-search-container {
+        width: 100%;
+        margin-bottom: 24px;
+    }
+
+    .cupon-search-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+    }
+
+    @@media (max-width: 768px) {
+        .cupon-search-grid {
+            grid-template-columns: 1fr;
+            gap: 14px;
+        }
+    }
+
+    .cupon-search-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 16px 18px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .cupon-search-card:hover {
+        border-color: #cbd5e1;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }
+
+    .cupon-card-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .cupon-header-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 15px;
+        flex-shrink: 0;
+    }
+
+    .cupon-header-icon.icon-ticket {
+        background: #f0fdfa;
+        color: #0d9488;
+        border: 1px solid #ccfbf1;
+    }
+
+    .cupon-header-icon.icon-dni {
+        background: #eff6ff;
+        color: #2563eb;
+        border: 1px solid #dbeafe;
+    }
+
+    .cupon-header-info h4 {
+        margin: 0;
+        font-size: 13.5px;
+        font-weight: 700;
+        color: #0f172a;
+        line-height: 1.25;
+    }
+
+    .cupon-header-info p {
+        margin: 1px 0 0 0;
+        font-size: 11px;
+        color: #64748b;
+    }
+
+    .cupon-form-group {
+        margin-bottom: 0 !important;
+    }
+
+    .cupon-form-group label {
+        display: block;
+        font-size: 11px;
+        font-weight: 600;
+        color: #475569;
+        margin-bottom: 5px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+
+    .cupon-input-wrapper {
+        display: flex;
+        align-items: stretch;
+        gap: 6px;
+    }
+
+    .cupon-input {
+        height: 36px !important;
+        font-size: 13px !important;
+        padding: 5px 12px !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 6px !important;
+        color: #1e293b !important;
+        background: #ffffff !important;
+        box-shadow: none !important;
+        flex: 1;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .cupon-input:focus {
+        border-color: #3c8dbc !important;
+        box-shadow: 0 0 0 3px rgba(60, 141, 188, 0.15) !important;
+        outline: none !important;
+    }
+
+    #cupon_input {
+        letter-spacing: 1.2px;
+        font-weight: 600;
+        font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    .btn-cupon-submit {
+        height: 36px !important;
+        padding: 0 14px !important;
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        border-radius: 6px !important;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+        transition: all 0.15s ease;
+    }
+
+    .btn-cupon-submit.btn-info {
+        background-color: #0284c7 !important;
+        border-color: #0284c7 !important;
+        color: #ffffff !important;
+    }
+
+    .btn-cupon-submit.btn-info:hover {
+        background-color: #0369a1 !important;
+        border-color: #0369a1 !important;
+    }
+
+    .btn-cupon-submit.btn-primary {
+        background-color: #2563eb !important;
+        border-color: #2563eb !important;
+        color: #ffffff !important;
+    }
+
+    .btn-cupon-submit.btn-primary:hover {
+        background-color: #1d4ed8 !important;
+        border-color: #1d4ed8 !important;
+    }
+
+    .cupon-help-text {
+        display: block;
+        font-size: 11px;
+        color: #94a3b8;
+        margin-top: 5px;
+    }
+
+    /* Results Card Enhancements */
+    .cupon-results-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 20px 22px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+        margin-bottom: 20px;
+    }
+
+    .cupon-results-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 14px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .cupon-results-title {
+        font-size: 15px;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+</style>
+
+<!-- Page Header (Title + Subtitle) -->
+<div class="page-header-row">
+    <div class="page-header-left">
+        <div class="page-header-title-wrap">
+            <h1 class="modern-page-title">Validación de Cupones</h1>
+        </div>
+        <p class="modern-page-subtitle">Verifique y canjee cupones de descuento por código o consulte los cupones activos por DNI del cliente.</p>
+    </div>
+</div>
+
+<!-- Formulario de Búsqueda Compacto -->
+<div class="cupon-search-container">
+    <div class="cupon-search-grid">
+        <!-- Card 1: Por Cupón -->
+        <div class="cupon-search-card">
+            <div class="cupon-card-header">
+                <div class="cupon-header-icon icon-ticket">
+                    <i class="fa fa-ticket"></i>
+                </div>
+                <div class="cupon-header-info">
+                    <h4>Buscar por Cupón</h4>
+                    <p>Validación directa de código promocional</p>
+                </div>
             </div>
             <form asp-action="Buscar" method="post">
-                <div class="box-body">
-                    <div class="form-group">
-                        <label for="cupon_input">Código del Cupón</label>
-                        <div class="input-group input-group-lg">
-                            <input type="text" class="form-control" id="cupon_input" name="codigo" placeholder="Ej: ABCD-1234" required autocomplete="off" style="text-transform: uppercase;" maxlength="9">
-                            <span class="input-group-btn">
-                                <button type="submit" class="btn btn-info btn-flat">Buscar</button>
-                            </span>
-                        </div>
-                        <p class="help-block">Ingrese el código del cupón (ej. 6BSE-6U5D).</p>
+                <div class="form-group cupon-form-group">
+                    <label for="cupon_input">Código del Cupón</label>
+                    <div class="cupon-input-wrapper">
+                        <input type="text" class="form-control cupon-input" id="cupon_input" name="codigo" placeholder="Ej: ABCD-1234" required autocomplete="off" style="text-transform: uppercase;" maxlength="9">
+                        <button type="submit" class="btn btn-info btn-cupon-submit">
+                            <i class="fa fa-search"></i> Buscar
+                        </button>
                     </div>
+                    <span class="cupon-help-text"><i class="fa fa-info-circle"></i> Ingrese el código (ej. 6BSE-6U5D).</span>
                 </div>
             </form>
         </div>
-    </div>
-    <div class="col-md-6">
-        <div class="box box-primary">
-            <div class="box-header with-border">
-                <h3 class="box-title">Buscar por DNI</h3>
+
+        <!-- Card 2: Por DNI -->
+        <div class="cupon-search-card">
+            <div class="cupon-card-header">
+                <div class="cupon-header-icon icon-dni">
+                    <i class="fa fa-id-card-o"></i>
+                </div>
+                <div class="cupon-header-info">
+                    <h4>Buscar por DNI</h4>
+                    <p>Consulta de cupones de un cliente</p>
+                </div>
             </div>
             <form asp-action="Buscar" method="post">
-                <div class="box-body">
-                    <div class="form-group">
-                        <label for="dni_input">DNI del Cliente</label>
-                        <div class="input-group input-group-lg">
-                            <input type="text" class="form-control" id="dni_input" name="codigo" placeholder="Ej: 12345678" required autocomplete="off" maxlength="15">
-                            <span class="input-group-btn">
-                                <button type="submit" class="btn btn-primary btn-flat">Buscar</button>
-                            </span>
-                        </div>
-                        <p class="help-block">Ingrese el DNI del cliente para ver sus cupones disponibles.</p>
+                <div class="form-group cupon-form-group">
+                    <label for="dni_input">DNI del Cliente</label>
+                    <div class="cupon-input-wrapper">
+                        <input type="text" class="form-control cupon-input" id="dni_input" name="codigo" placeholder="Ej: 12345678" required autocomplete="off" maxlength="15">
+                        <button type="submit" class="btn btn-primary btn-cupon-submit">
+                            <i class="fa fa-search"></i> Buscar
+                        </button>
                     </div>
+                    <span class="cupon-help-text"><i class="fa fa-info-circle"></i> Ingrese el DNI sin puntos para ver cupones disponibles.</span>
                 </div>
             </form>
         </div>
@@ -53,25 +274,29 @@
 {
     if (ViewBag.EsBusqueda == true)
     {
-        var cliente = Model.First().Cliente.Persona;
+        var cliente = Model.First().Cliente?.Persona;
+        var nombreCliente = cliente != null ? $"{cliente.Apellido}, {cliente.Nombres}" : "Cliente";
         var cuponesDisponibles = Model.Where(x => x.Activo && DateTime.Now.Date <= x.Fecha.Date.AddDays(x.Premio.DiasDeVencimiento)).ToList();
         var cuponesCanjeados = Model.Where(x => !x.Activo).OrderByDescending(x => x.Fecha).ToList();
         var cuponesVencidos = Model.Where(x => x.Activo && DateTime.Now.Date > x.Fecha.Date.AddDays(x.Premio.DiasDeVencimiento)).ToList();
 
-        <div class="row" style="margin-bottom: 10px;">
-            <div class="col-xs-12">
-                <a asp-action="Index" class="btn btn-default btn-sm"><i class="fa fa-arrow-left"></i> Volver al Historial General</a>
-            </div>
+        <div style="margin-bottom: 16px;">
+            <a asp-action="Index" class="btn btn-default btn-sm" style="border-radius: 6px; font-weight: 500;">
+                <i class="fa fa-arrow-left"></i> Volver al Historial General
+            </a>
         </div>
 
         if (cuponesDisponibles.Any())
         {
-            <div class="box box-success">
-                <div class="box-header with-border">
-                    <h3 class="box-title">Cupones Disponibles de @cliente.Apellido, @cliente.Nombres</h3>
+            <div class="cupon-results-card">
+                <div class="cupon-results-header">
+                    <h3 class="cupon-results-title text-success">
+                        <i class="fa fa-check-circle"></i> Cupones Disponibles de @nombreCliente
+                    </h3>
+                    <span class="badge-pill badge-pill-green">@cuponesDisponibles.Count disponible(s)</span>
                 </div>
-                <div class="box-body table-responsive">
-                    <table class="table table-bordered table-striped">
+                <div class="table-responsive">
+                    <table class="table modern-table table-bordered table-striped">
                         <thead>
                             <tr>
                                 <th>Premio</th>
@@ -79,22 +304,24 @@
                                 <th>Términos y Condiciones</th>
                                 <th>Código Cupón</th>
                                 <th>Vencimiento</th>
-                                <th>Acción</th>
+                                <th style="width: 100px; text-align: center;">Acción</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var item in cuponesDisponibles)
                             {
                                 <tr>
-                                    <td>@item.Premio.Nombre</td>
+                                    <td><strong>@item.Premio.Nombre</strong></td>
                                     <td>@item.Premio.Descripcion</td>
                                     <td>@item.Premio.TerminosCondiciones</td>
-                                    <td>@item.CodigoCupon</td>
+                                    <td><code style="font-size: 13px; font-weight: 700; color: #0f172a; background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">@item.CodigoCupon</code></td>
                                     <td>@item.Fecha.Date.AddDays(item.Premio.DiasDeVencimiento).ToString("dd/MM/yyyy")</td>
-                                    <td>
+                                    <td style="text-align: center;">
                                         <form asp-action="Validar" method="post" style="display:inline;">
                                             <input type="hidden" name="codigo" value="@item.CodigoCupon" />
-                                            <button type="button" class="btn btn-success btn-sm" onclick="confirmarValidacion(this, '@item.CodigoCupon')"><i class="fa fa-check"></i> Validar</button>
+                                            <button type="button" class="btn btn-success btn-sm" style="border-radius: 4px;" onclick="confirmarValidacion(this, '@item.CodigoCupon')">
+                                                <i class="fa fa-check"></i> Validar
+                                            </button>
                                         </form>
                                     </td>
                                 </tr>
@@ -107,12 +334,15 @@
 
         if (cuponesCanjeados.Any())
         {
-            <div class="box box-warning">
-                <div class="box-header with-border">
-                    <h3 class="box-title">Historial de Cupones Canjeados de @cliente.Apellido, @cliente.Nombres</h3>
+            <div class="cupon-results-card">
+                <div class="cupon-results-header">
+                    <h3 class="cupon-results-title text-warning">
+                        <i class="fa fa-history"></i> Historial de Canjeados de @nombreCliente
+                    </h3>
+                    <span class="badge-pill badge-pill-blue">@cuponesCanjeados.Count canjeado(s)</span>
                 </div>
-                <div class="box-body table-responsive">
-                    <table class="table table-bordered table-striped">
+                <div class="table-responsive">
+                    <table class="table modern-table table-bordered table-striped">
                         <thead>
                             <tr>
                                 <th>Premio</th>
@@ -128,9 +358,9 @@
                                 <tr>
                                     <td>@item.Premio.Nombre</td>
                                     <td>@item.Premio.Descripcion</td>
-                                    <td>@item.CodigoCupon</td>
+                                    <td><code>@item.CodigoCupon</code></td>
                                     <td>@item.Fecha.ToString("dd/MM/yyyy HH:mm")</td>
-                                    <td><span class="label label-warning">Canjeado</span></td>
+                                    <td><span class="badge-pill badge-pill-slate">Canjeado</span></td>
                                 </tr>
                             }
                         </tbody>
@@ -141,12 +371,15 @@
 
         if (cuponesVencidos.Any())
         {
-            <div class="box box-danger">
-                <div class="box-header with-border">
-                    <h3 class="box-title">Cupones Vencidos de @cliente.Apellido, @cliente.Nombres</h3>
+            <div class="cupon-results-card">
+                <div class="cupon-results-header">
+                    <h3 class="cupon-results-title text-danger">
+                        <i class="fa fa-clock-o"></i> Cupones Vencidos de @nombreCliente
+                    </h3>
+                    <span class="badge-pill badge-pill-red">@cuponesVencidos.Count vencido(s)</span>
                 </div>
-                <div class="box-body table-responsive">
-                    <table class="table table-bordered table-striped">
+                <div class="table-responsive">
+                    <table class="table modern-table table-bordered table-striped">
                         <thead>
                             <tr>
                                 <th>Premio</th>
@@ -164,9 +397,9 @@
                                     <td>@item.Premio.Nombre</td>
                                     <td>@item.Premio.Descripcion</td>
                                     <td>@item.Premio.TerminosCondiciones</td>
-                                    <td>@item.CodigoCupon</td>
+                                    <td><code>@item.CodigoCupon</code></td>
                                     <td>@item.Fecha.Date.AddDays(item.Premio.DiasDeVencimiento).ToString("dd/MM/yyyy")</td>
-                                    <td><span class="label label-danger">Vencido</span></td>
+                                    <td><span class="badge-pill badge-pill-red">Vencido</span></td>
                                 </tr>
                             }
                         </tbody>
@@ -177,12 +410,15 @@
     }
     else
     {
-        <div class="box box-warning">
-            <div class="box-header with-border">
-                <h3 class="box-title">Historial Reciente de Canjes (Global)</h3>
+        <div class="cupon-results-card">
+            <div class="cupon-results-header">
+                <h3 class="cupon-results-title">
+                    <i class="fa fa-history text-muted"></i> Historial Reciente de Canjes (Global)
+                </h3>
+                <span class="badge-total-registros">Últimos @Model.Count canjes</span>
             </div>
-            <div class="box-body table-responsive">
-                <table class="table table-bordered table-striped">
+            <div class="table-responsive">
+                <table class="table modern-table table-bordered table-striped">
                     <thead>
                         <tr>
                             <th>Cliente</th>
@@ -195,12 +431,13 @@
                     <tbody>
                         @foreach (var item in Model)
                         {
+                            var nomCliente = item.Cliente?.Persona != null ? $"{item.Cliente.Persona.Apellido}, {item.Cliente.Persona.Nombres}" : "-";
                             <tr>
-                                <td>@item.Cliente.Persona.Apellido, @item.Cliente.Persona.Nombres</td>
-                                <td>@item.Premio.Nombre</td>
-                                <td>@item.CodigoCupon</td>
+                                <td><strong>@nomCliente</strong></td>
+                                <td>@item.Premio?.Nombre</td>
+                                <td><code>@item.CodigoCupon</code></td>
                                 <td>@item.Fecha.ToString("dd/MM/yyyy HH:mm")</td>
-                                <td><span class="label label-warning">Canjeado</span></td>
+                                <td><span class="badge-pill badge-pill-slate">Canjeado</span></td>
                             </tr>
                         }
                     </tbody>

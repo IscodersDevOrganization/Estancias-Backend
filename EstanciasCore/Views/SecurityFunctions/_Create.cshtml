@@ -1,124 +1,527 @@
-@using Commons.HtmlHelpers
+@using Commons.Identity
 @model Commons.Identity.CommonsFunction
 @{
     ViewData["Title"] = "Crear Función de Seguridad";
-    var routeGroups = ViewBag.RouteGroups as List<EstanciasCore.Controllers.SecurityFunctionsController.RouteGroup> ?? new List<EstanciasCore.Controllers.SecurityFunctionsController.RouteGroup>();
-    var allRoutesFlat = ViewBag.AllRoutesFlat as List<string> ?? new List<string>();
-    var selectedRoutes = ViewBag.SelectedRoutes as List<string> ?? new List<string>();
+    var rawRouteGroups = ViewBag.RouteGroups as List<EstanciasCore.Controllers.SecurityFunctionsController.RouteGroup> ?? new List<EstanciasCore.Controllers.SecurityFunctionsController.RouteGroup>();
+
+    var routeGroups = rawRouteGroups
+        .Select(g => new {
+            ControllerName = string.IsNullOrEmpty(g?.ControllerName) ? "Otros" : g.ControllerName,
+            AreaName = g?.AreaName ?? "",
+            Routes = g?.Routes ?? new List<string>()
+        })
+        .OrderBy(g => g.AreaName)
+        .ThenBy(g => g.ControllerName)
+        .ToList();
 }
-<form asp-action="_Create" asp-controller="SecurityFunctions">
 
-    @using (Html.BoxBody())
-    {
+<style>
+    .func-modal-container {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        color: #1e293b;
+        padding: 4px;
+    }
+
+    .func-modal-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .func-header-left {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+
+    .func-shield-badge {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: #eff6ff;
+        border: 1px solid #dbeafe;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #2563eb;
+        font-size: 20px;
+        flex-shrink: 0;
+    }
+
+    .func-header-titles h3 {
+        font-size: 18px;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0;
+        line-height: 1.25;
+    }
+
+    .func-header-titles p {
+        font-size: 12.5px;
+        color: #64748b;
+        margin: 2px 0 0 0;
+    }
+
+    .func-close-btn {
+        background: transparent;
+        border: none;
+        font-size: 24px;
+        line-height: 1;
+        color: #94a3b8;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 6px;
+        transition: all 0.15s ease;
+    }
+
+    .func-close-btn:hover {
+        color: #0f172a;
+        background: #f1f5f9;
+    }
+
+    /* Fast Controller Selector Banner */
+    .func-quick-card {
+        background: #f0fdf4;
+        border: 1.5px solid #bbf7d0;
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin-bottom: 18px;
+    }
+
+    .func-quick-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+    }
+
+    .func-quick-title {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        color: #166534;
+        text-transform: uppercase;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    /* 3-Level Categories Card (Free Text) */
+    .func-cat-card {
+        background: #f8fafc;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin-bottom: 18px;
+    }
+
+    .func-cat-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+    }
+
+    .func-cat-title {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        color: #334155;
+        text-transform: uppercase;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .func-cat-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+    }
+
+    @@media (max-width: 768px) {
+        .func-cat-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .func-cat-col label {
+        display: block;
+        font-size: 11px;
+        font-weight: 600;
+        color: #475569;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+
+    .func-cat-preview {
+        margin-top: 10px;
+        font-size: 11.5px;
+        color: #64748b;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: #ffffff;
+        padding: 6px 12px;
+        border-radius: 6px;
+        border: 1px dashed #cbd5e1;
+    }
+
+    .func-field-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+
+    @@media (max-width: 768px) {
+        .func-field-row {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .func-form-field {
+        margin-bottom: 16px;
+    }
+
+    .func-form-field label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        color: #334155;
+        margin-bottom: 6px;
+    }
+
+    .func-form-field input,
+    .func-form-field textarea,
+    .func-form-field select,
+    .func-cat-col input {
+        border-radius: 8px !important;
+        border: 1px solid #cbd5e1 !important;
+        padding: 7px 12px !important;
+        font-size: 12.5px !important;
+        box-shadow: none !important;
+        color: #1e293b !important;
+        background: #ffffff !important;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .func-form-field input:focus,
+    .func-form-field textarea:focus,
+    .func-form-field select:focus,
+    .func-cat-col input:focus {
+        border-color: #3c8dbc !important;
+        box-shadow: 0 0 0 3px rgba(60, 141, 188, 0.15) !important;
+        outline: none !important;
+    }
+
+    .func-modal-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-top: 16px;
+        border-top: 1px solid #f1f5f9;
+        margin-top: 16px;
+    }
+
+    .func-footer-count {
+        font-size: 12.5px;
+        color: #64748b;
+    }
+
+    .func-footer-count strong {
+        color: #0f172a;
+        font-weight: 700;
+    }
+
+    .func-footer-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .func-footer-actions .btn {
+        border-radius: 3px !important;
+        font-weight: 500 !important;
+        font-size: 12px !important;
+        line-height: 1.5 !important;
+        padding: 6px 18px !important;
+    }
+</style>
+
+<div class="func-modal-container" id="createFunctionRoot">
+    <form asp-action="_Create" asp-controller="SecurityFunctions" method="post" id="formCreateFunction" onsubmit="return prepareFunctionSubmit();">
         <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-        
-        <div class="form-group">
-            <label asp-for="Name" class="control-label">Nombre de Función</label>
-            <input asp-for="Name" class="form-control" required />
-            <span asp-validation-for="Name" class="text-danger"></span>
-        </div>
+        <input type="hidden" name="Description" id="finalDescriptionInput" />
 
-        <div class="form-group">
-            <label asp-for="Description" class="control-label">Descripción</label>
-            <textarea asp-for="Description" class="form-control" rows="3"></textarea>
-            <span asp-validation-for="Description" class="text-danger"></span>
-        </div>
+        <!-- Container for auto-populated routes from selected controller -->
+        <div id="hiddenRoutesContainer"></div>
 
-        <div class="form-group">
-            <label class="control-label">Rutas Habilitadas</label>
-            
-            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                <div style="flex-grow: 1;">
-                    <input type="text" id="routeFilter" class="form-control" placeholder="Buscar / filtrar por controlador o ruta..." />
+        <!-- Header -->
+        <div class="func-modal-header">
+            <div class="func-header-left">
+                <div class="func-shield-badge">
+                    <i class="fa fa-shield"></i>
+                </div>
+                <div class="func-header-titles">
+                    <h3>Nueva Función de Seguridad</h3>
+                    <p>Seleccione un controlador completo para habilitar todas sus rutas y defina su clasificación.</p>
                 </div>
             </div>
+            <button type="button" class="func-close-btn" data-dismiss="modal" title="Cerrar">&times;</button>
+        </div>
 
-            <div style="max-height: 350px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; border-radius: 4px; background-color: #ffffff;" id="routesContainer">
+        <!-- 1. Quick Full Controller Selector -->
+        <div class="func-quick-card">
+            <div class="func-quick-header">
+                <span class="func-quick-title">
+                    <i class="fa fa-bolt text-success"></i> ELEGIR CONTROLADOR COMPLETO:
+                </span>
+                <span id="ctrlSelectedCountBadge" class="badge-pill badge-pill-green" style="display: none;"></span>
+            </div>
+            <select id="quickControllerPicker" class="form-control" onchange="onQuickControllerChanged(this)">
+                <option value="">-- Seleccionar un Controlador para habilitar todas sus rutas --</option>
+                @foreach (var g in routeGroups)
+                {
+                    var ctrl = g.ControllerName ?? "Otros";
+                    var areaPrefix = !string.IsNullOrEmpty(g.AreaName) ? $"[{g.AreaName}] " : "";
+                    var routesJson = Newtonsoft.Json.JsonConvert.SerializeObject(g.Routes);
+                    <option value="@ctrl" data-controller="@ctrl" data-area="@g.AreaName" data-count="@g.Routes.Count" data-routes='@routesJson'>
+                        @areaPrefix@ctrl (@g.Routes.Count rutas disponibles)
+                    </option>
+                }
+            </select>
+        </div>
 
-                @if (routeGroups.Count == 0)
-                {
-                    <div class="text-muted">No se encontraron rutas activas en la aplicación.</div>
-                }
-                else
-                {
-                    foreach (var group in routeGroups)
-                    {
-                        var groupHeaderId = $"group_{group.AreaName}_{group.ControllerName}".Replace(".", "_");
-                        var areaText = !string.IsNullOrEmpty(group.AreaName) ? $"[{group.AreaName}] " : "";
-                        
-                        <div class="controller-group" style="margin-bottom: 15px; border-bottom: 1px solid #f4f4f4; padding-bottom: 8px;">
-                            <div style="display: flex; align-items: center; justify-content: space-between; background-color: #f9f9f9; padding: 4px 8px; border-radius: 3px; border-left: 3px solid #3c8dbc;">
-                                <h5 style="margin: 0; font-size: 1.05em;"><strong>@areaText@group.ControllerName</strong></h5>
-                                <label style="margin: 0; font-weight: normal; cursor: pointer; font-size: 0.9em;">
-                                    <input type="checkbox" class="select-all-controller" data-target="@groupHeaderId" /> Seleccionar Todo
-                                </label>
-                            </div>
-                            
-                            <div id="@groupHeaderId" class="controller-routes" style="padding-left: 15px; margin-top: 5px;">
-                                @foreach (var route in group.Routes)
-                                {
-                                    var isChecked = selectedRoutes.Contains(route) ? "checked" : "";
-                                    <div class="checkbox route-item" style="margin-top: 5px; margin-bottom: 5px;">
-                                        <label style="width: 100%; cursor: pointer; font-size: 0.95em;">
-                                            <input type="checkbox" name="selectedRoutes" class="individual-route" value="@route" @isChecked />
-                                            <span class="route-path">@route</span>
-                                        </label>
-                                    </div>
-                                }
-                            </div>
-                        </div>
-                    }
-                }
+        <!-- 2. Hierarchical Classification (3 Levels: Free Text) -->
+        <div class="func-cat-card">
+            <div class="func-cat-header">
+                <span class="func-cat-title">
+                    <i class="fa fa-folder-open text-primary"></i> CLASIFICACIÓN (CATEGORÍA Y SUBCATEGORÍAS - TEXTO LIBRE):
+                </span>
+            </div>
+            <div class="func-cat-grid">
+                <div class="func-cat-col">
+                    <label>1. Categoría Principal</label>
+                    <input type="text" id="cat1Input" list="cat1Datalist" class="form-control" placeholder="Ej: Gestión Operativa" oninput="updateCategoryPreview()" />
+                    <datalist id="cat1Datalist">
+                        <option value="Gestión Operativa" />
+                        <option value="Datos Maestros" />
+                        <option value="Reportes & Estadísticas" />
+                        <option value="Sistema & Seguridad" />
+                    </datalist>
+                </div>
+                <div class="func-cat-col">
+                    <label>2. Subcategoría</label>
+                    <input type="text" id="cat2Input" list="cat2Datalist" class="form-control" placeholder="Ej: Clientes y Cuentas" oninput="updateCategoryPreview()" />
+                    <datalist id="cat2Datalist">
+                        <option value="Clientes y Cuentas" />
+                        <option value="Cobranzas y Tarjetas" />
+                        <option value="Cupones y Fidelización" />
+                        <option value="Marketing y Banners" />
+                        <option value="Ventas y Vendedores" />
+                        <option value="Catálogo y Artículos" />
+                        <option value="Sucursales y Puntos de Venta" />
+                        <option value="Empresas y Grupos" />
+                        <option value="Proveedores y Rubros" />
+                        <option value="Marcas Comerciales" />
+                        <option value="Billetera y Movimientos" />
+                        <option value="Conceptos y Contabilidad" />
+                        <option value="Gestión de Usuarios" />
+                        <option value="Perfiles y Roles" />
+                    </datalist>
+                </div>
+                <div class="func-cat-col">
+                    <label>3. Subcategoría Detalle</label>
+                    <input type="text" id="cat3Input" list="cat3Datalist" class="form-control" placeholder="Ej: Acceso Completo" oninput="updateCategoryPreview()" />
+                    <datalist id="cat3Datalist">
+                        <option value="Acceso Completo" />
+                        <option value="Consultas y Listados" />
+                        <option value="Altas y Creación" />
+                        <option value="Edición y Modificación" />
+                        <option value="Bajas y Eliminación" />
+                        <option value="Reportes y Exportación" />
+                        <option value="Operaciones Especiales" />
+                    </datalist>
+                </div>
+            </div>
+            <div class="func-cat-preview">
+                <i class="fa fa-tags text-primary"></i>
+                <span>Etiqueta: <strong id="lblCatPreview" style="color: #0f172a;">[Sin categoría asignada]</strong></span>
             </div>
         </div>
-    }
-    @using (Html.BoxFooter())
-    {
-        <a class="btn btn-default" asp-action="Index">Cancelar</a>
-        <input type="submit" value="Guardar" class="btn btn-primary pull-right" />
-    }
 
-</form>
+        <!-- 3. Form Name & Description -->
+        <div class="func-field-row">
+            <div class="func-form-field">
+                <label asp-for="Name">Nombre de la Función</label>
+                <input asp-for="Name" id="functionNameInput" class="form-control" required placeholder="Ej: Clientes o Sucursales" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+            <div class="func-form-field">
+                <label>Descripción del Permiso</label>
+                <input type="text" id="userDescriptionInput" class="form-control" placeholder="Ej: Control de acceso completo a las operaciones del módulo" />
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="func-modal-footer">
+            <div class="func-footer-count">
+                <span id="lblRoutesStatus"><strong id="lblRoutesFooterCount">0</strong> ruta(s) asociadas a este controlador</span>
+            </div>
+            <div class="func-footer-actions">
+                <button type="button" class="btn btn-default btn-sm" data-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary btn-sm">Guardar Función</button>
+            </div>
+        </div>
+    </form>
+</div>
 
 <script>
-    $(document).ready(function () {
+    var lastSelectedCtrl = '';
 
-
-        // Seleccionar todo en un controlador
-        $('.select-all-controller').off('change').on('change', function () {
-            var targetId = $(this).data('target');
-            var isChecked = $(this).prop('checked');
-            $('#' + targetId).find('.individual-route').prop('checked', isChecked);
-        });
-
-        // Filtrar controladores y rutas
-        $('#routeFilter').off('keyup').on('keyup', function () {
-            var query = $(this).val().toLowerCase();
-            $('.controller-group').each(function () {
-                var controllerText = $(this).find('h5').text().toLowerCase();
-                var hasVisibleRoute = false;
-                
-                $(this).find('.route-item').each(function () {
-                    var routeText = $(this).find('.route-path').text().toLowerCase();
-                    if (routeText.indexOf(query) > -1 || controllerText.indexOf(query) > -1) {
-                        $(this).show();
-                        hasVisibleRoute = true;
-                    } else {
-                        $(this).hide();
-                    }
-                });
-                
-                if (hasVisibleRoute || controllerText.indexOf(query) > -1) {
-                    $(this).show();
-                    if (controllerText.indexOf(query) > -1) {
-                        $(this).find('.route-item').show();
-                    }
-                } else {
-                    $(this).hide();
-                }
+    $(function () {
+        var $modal = $('#createFunctionRoot').closest('.modal');
+        if ($modal.length > 0) {
+            $modal.find('.modal-header').hide();
+            $modal.find('.modal-footer').hide();
+            $modal.find('.modal-dialog').css({
+                'max-width': '780px',
+                'width': '92%',
+                'margin': '30px auto'
             });
+            $modal.find('.modal-body').css({
+                'padding': '24px 28px',
+                'background': '#ffffff',
+                'border-radius': '14px'
+            });
+            $modal.find('.modal-content').css({
+                'border-radius': '14px',
+                'border': '1px solid #e2e8f0',
+                'box-shadow': '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+            });
+        }
+
+        updateCategoryPreview();
+    });
+
+    // 1. Manejo de Selección de Controlador Completo (Carga todas las rutas en hidden inputs)
+    function onQuickControllerChanged(selectElem) {
+        var $sel = $(selectElem);
+        var ctrlName = $sel.val();
+        if (!ctrlName) {
+            $('#hiddenRoutesContainer').empty();
+            $('#ctrlSelectedCountBadge').hide();
+            $('#lblRoutesFooterCount').text('0');
+            return;
+        }
+
+        var $opt = $sel.find('option:selected');
+        var areaName = $opt.data('area') || '';
+        var routes = [];
+        try {
+            routes = JSON.parse($opt.attr('data-routes') || '[]');
+        } catch (e) {
+            routes = [];
+        }
+
+        // Generar inputs hidden con todas las rutas del controlador seleccionado
+        var $container = $('#hiddenRoutesContainer');
+        $container.empty();
+        $.each(routes, function (i, r) {
+            $container.append($('<input type="hidden" name="selectedRoutes" />').val(r));
         });
 
+        // Autocompletar Nombre de Función
+        var $name = $('#functionNameInput');
+        if (!$name.val() || $name.val() === lastSelectedCtrl) {
+            $name.val(ctrlName);
+        }
+        lastSelectedCtrl = ctrlName;
 
-    });
+        // Autocompletar Descripción
+        var $desc = $('#userDescriptionInput');
+        if (!$desc.val()) {
+            $desc.val('Acceso completo al controlador ' + ctrlName + (!areaName ? '' : ' [' + areaName + ']'));
+        }
+
+        // Sugerir Categorías libres iniciales si están vacías
+        if (!$('#cat1Input').val()) {
+            deduceCategories(ctrlName, areaName);
+        }
+
+        $('#lblRoutesFooterCount').text(routes.length);
+        $('#ctrlSelectedCountBadge').html('<i class="fa fa-check"></i> ' + routes.length + ' rutas habilitadas').show();
+    }
+
+    function deduceCategories(ctrl, area) {
+        var c = (ctrl || '').toLowerCase();
+        var a = (area || '').toLowerCase();
+
+        var cat1 = 'Gestión Operativa';
+        var cat2 = ctrl;
+        var cat3 = 'Acceso Completo';
+
+        if (a === 'reportes' || c.indexOf('reporte') !== -1 || c.indexOf('resumen') !== -1) {
+            cat1 = 'Reportes & Estadísticas';
+            cat2 = 'Informes de ' + ctrl;
+        } else if (a === 'administracion' || c.indexOf('usuario') !== -1 || c.indexOf('security') !== -1 || c.indexOf('rol') !== -1 || c.indexOf('funcion') !== -1) {
+            cat1 = 'Sistema & Seguridad';
+            cat2 = 'Control de ' + ctrl;
+        } else if (c.indexOf('sucursal') !== -1 || c.indexOf('empresa') !== -1 || c.indexOf('proveedor') !== -1 || c.indexOf('marca') !== -1 || c.indexOf('moneda') !== -1 || c.indexOf('pais') !== -1 || c.indexOf('billetera') !== -1 || c.indexOf('concepto') !== -1 || c.indexOf('tipo') !== -1) {
+            cat1 = 'Datos Maestros';
+            cat2 = 'Configuración de ' + ctrl;
+        }
+
+        $('#cat1Input').val(cat1);
+        $('#cat2Input').val(cat2);
+        $('#cat3Input').val(cat3);
+        updateCategoryPreview();
+    }
+
+    function updateCategoryPreview() {
+        var c1 = ($('#cat1Input').val() || '').trim();
+        var c2 = ($('#cat2Input').val() || '').trim();
+        var c3 = ($('#cat3Input').val() || '').trim();
+
+        var tags = [];
+        if (c1) tags.push(c1);
+        if (c2) tags.push(c2);
+        if (c3) tags.push(c3);
+
+        if (tags.length > 0) {
+            $('#lblCatPreview').text('[' + tags.join(' > ') + ']');
+        } else {
+            $('#lblCatPreview').text('[Sin categoría asignada]');
+        }
+    }
+
+    // Preparar el envío del formulario construyendo la descripción compuesta
+    function prepareFunctionSubmit() {
+        var c1 = ($('#cat1Input').val() || '').trim();
+        var c2 = ($('#cat2Input').val() || '').trim();
+        var c3 = ($('#cat3Input').val() || '').trim();
+        var userDesc = ($('#userDescriptionInput').val() || '').trim();
+
+        var tags = [];
+        if (c1) tags.push(c1);
+        if (c2) tags.push(c2);
+        if (c3) tags.push(c3);
+
+        var tagStr = tags.length > 0 ? '[' + tags.join(' > ') + ']' : '';
+        var finalDesc = tagStr + (userDesc ? (tagStr ? ' ' : '') + userDesc : '');
+        $('#finalDescriptionInput').val(finalDesc);
+
+        var selectedCount = $('#hiddenRoutesContainer input[name="selectedRoutes"]').length;
+        if (selectedCount === 0) {
+            alert('Por favor, elija un controlador para habilitar sus rutas.');
+            return false;
+        }
+
+        return true;
+    }
 </script>

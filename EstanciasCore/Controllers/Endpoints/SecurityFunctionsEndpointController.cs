@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -145,11 +145,8 @@ namespace EstanciasCore.Endpoints
                 function.LastEditTime = DateTime.Now;
                 function.Display = true;
                 function.Show = true;
-                function.RoutesJson = JsonConvert.SerializeObject(
-                    request != null && request.SelectedRoutes != null
-                        ? request.SelectedRoutes
-                        : new List<string>()
-                );
+                var routeObjs = (request != null && request.SelectedRoutes != null ? request.SelectedRoutes : new List<string>()).Select(r => new CommonsRoute(r)).ToList();
+                function.RoutesJson = JsonConvert.SerializeObject(routeObjs);
 
                 await _context.Set<CommonsFunction>().AddAsync(function);
                 await _context.SaveChangesAsync();
@@ -226,9 +223,8 @@ namespace EstanciasCore.Endpoints
                 existingFunction.Display = request.Display;
                 existingFunction.Show = request.Show;
                 existingFunction.LastEditTime = DateTime.Now;
-                existingFunction.RoutesJson = JsonConvert.SerializeObject(
-                    request.SelectedRoutes ?? new List<string>()
-                );
+                var routeObjs = (request.SelectedRoutes ?? new List<string>()).Select(r => new CommonsRoute(r)).ToList();
+                existingFunction.RoutesJson = JsonConvert.SerializeObject(routeObjs);
 
                 _context.Set<CommonsFunction>().Update(existingFunction);
                 await _context.SaveChangesAsync();
@@ -371,6 +367,19 @@ namespace EstanciasCore.Endpoints
 
             if (routesJson.StartsWith("[") && routesJson.EndsWith("]"))
             {
+                try
+                {
+                    var commonsRoutes = JsonConvert.DeserializeObject<List<CommonsRoute>>(routesJson);
+                    if (commonsRoutes != null && commonsRoutes.Any(r => !string.IsNullOrEmpty(r?.Url)))
+                    {
+                        return commonsRoutes.Select(r => r.Url).Where(u => !string.IsNullOrEmpty(u)).ToList();
+                    }
+                }
+                catch
+                {
+                    // Fallback to string array
+                }
+
                 try
                 {
                     return JsonConvert.DeserializeObject<List<string>>(routesJson);

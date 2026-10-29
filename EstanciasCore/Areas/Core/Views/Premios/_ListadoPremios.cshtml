@@ -8,13 +8,14 @@
     <div class="box-header with-border filtro-grilla">
         <span class="txt-titulo-box">Listado de Cupones</span>
         <div class="pull-right" style="display: flex; align-items: center;">
-            <select id="marcaFiltroPremios" class="form-control" style="width: 250px; margin-right: 35px; display: inline-block;">
+            <select id="marcaFiltroPremios" class="form-control" style="width: 220px; display: inline-block;">
                 <option value="">Todas las Marcas</option>
                 @foreach (var m in marcas)
                 {
                     <option value="@m.Nombre">@m.Nombre</option>
                 }
             </select>
+            <button type="button" class="btn btn-default btn-sm btn-clear-filters" style="margin-left: 8px; margin-right: 15px;" title="Limpiar filtros"><i class="fa fa-eraser"></i> <span class="hidden-xs">Limpiar</span></button>
             <a onclick="nuevoPremio()" class="btn btn-info btn-sm">
                 <i class="fa fa-plus"><span class="hidden-xs"> Nueva</span></i>
             </a>
@@ -111,18 +112,37 @@
 <modal title="Cambiar Foto" function="imagen" load-url="/Core/Premios/_CambiarImagen/" size="Medium"></modal>
 
 <script>
+    var tablePremios = null;
+    var storageMarcaPremiosKey = 'portal_flt_' + window.location.pathname.toLowerCase().replace(/\/$/, '') + '_marcafiltropremios';
+
     $(document).ready(function () {
-        var table = $('#listadoPremios').DataTable({
+        var savedMarca = sessionStorage.getItem(storageMarcaPremiosKey);
+        if (savedMarca !== null) {
+            try { savedMarca = JSON.parse(savedMarca); } catch (e) {}
+        }
+        if (savedMarca) {
+            $('#marcaFiltroPremios').val(savedMarca);
+        }
+
+        tablePremios = $('#listadoPremios').DataTable({
             "columnDefs": [{ "width": "10%", class: "text-center", "searchable": false, "orderable": false, "targets": -1 }],
             "language": {
                 'url': '@Url.Content("~/lib/arg.json")'
             }
         });
 
+        if (savedMarca) {
+            tablePremios.column(6).search('^' + $.fn.dataTable.util.escapeRegex(savedMarca) + ', true, false).draw();
+        }
+
         $('#marcaFiltroPremios').on('change', function () {
             var val = $(this).val();
-            // The Marca column is index 6 (0: Nombre, 1: Descripción, 2: Stock, 3: Stock Actual, 4: Puntos, 5: Categoría, 6: Marca)
-            table.column(6).search(val ? '^' + $.fn.dataTable.util.escapeRegex(val) + '$' : '', true, false).draw();
+            if (val) {
+                sessionStorage.setItem(storageMarcaPremiosKey, JSON.stringify(val));
+            } else {
+                sessionStorage.removeItem(storageMarcaPremiosKey);
+            }
+            tablePremios.column(6).search(val ? '^' + $.fn.dataTable.util.escapeRegex(val) + ' : '', true, false).draw();
         });
     });
 </script>

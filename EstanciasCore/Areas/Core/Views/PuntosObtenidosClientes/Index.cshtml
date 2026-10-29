@@ -3,222 +3,604 @@
 
 @{
     ViewData["Title"] = "Puntos Obtenidos por Clientes";
+    ViewData["BackArrow"] = "/Home/Index";
     var cultureArg = new CultureInfo("es-AR");
 }
 
-
 <style>
-    /* Aseguramos que en pantallas grandes ambas columnas tengan la misma altura */
-    @@media (min-width: 992px) {
-        .equal-height-row {
-            display: flex;
-            align-items: stretch;
+    .content-header {
+        display: none !important;
+    }
+
+    /* Contenedor a ancho completo */
+    .puntos-search-container {
+        width: 100%;
+        margin-bottom: 24px;
+    }
+
+    .puntos-search-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+        align-items: stretch;
+    }
+
+    @@media (max-width: 900px) {
+        .puntos-search-grid {
+            grid-template-columns: 1fr;
+            gap: 14px;
         }
-        .equal-height-row > .col-md-6 {
-            display: flex;
-            flex-direction: column;
-        }
-        .equal-height-row .box {
-            flex: 1; /* Hace que las cajas ocupen todo el alto disponible de la columna */
-            margin-bottom: 20px;
-        }
+    }
+
+    .puntos-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 16px 18px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .puntos-card:hover {
+        border-color: #cbd5e1;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }
+
+    .puntos-card-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .puntos-header-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 15px;
+        flex-shrink: 0;
+    }
+
+    .puntos-header-icon.icon-search {
+        background: #eff6ff;
+        color: #2563eb;
+        border: 1px solid #dbeafe;
+    }
+
+    .puntos-header-icon.icon-user {
+        background: #f0fdf4;
+        color: #16a34a;
+        border: 1px solid #bbf7d0;
+    }
+
+    .puntos-header-info h4 {
+        margin: 0;
+        font-size: 13.5px;
+        font-weight: 700;
+        color: #0f172a;
+        line-height: 1.25;
+    }
+
+    .puntos-header-info p {
+        margin: 1px 0 0 0;
+        font-size: 11px;
+        color: #64748b;
+    }
+
+    .puntos-form-group {
+        margin-bottom: 0 !important;
+    }
+
+    .puntos-form-group label {
+        display: block;
+        font-size: 11px;
+        font-weight: 600;
+        color: #475569;
+        margin-bottom: 5px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+
+    .puntos-input-wrapper {
+        display: flex;
+        align-items: stretch;
+        gap: 6px;
+    }
+
+    .puntos-input {
+        height: 36px !important;
+        font-size: 13px !important;
+        padding: 5px 12px !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 6px !important;
+        color: #1e293b !important;
+        background: #ffffff !important;
+        box-shadow: none !important;
+        flex: 1;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .puntos-input:focus {
+        border-color: #3c8dbc !important;
+        box-shadow: 0 0 0 3px rgba(60, 141, 188, 0.15) !important;
+        outline: none !important;
+    }
+
+    .btn-puntos-submit {
+        height: 36px !important;
+        padding: 0 16px !important;
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        border-radius: 6px !important;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+        background-color: #2563eb !important;
+        border-color: #2563eb !important;
+        color: #ffffff !important;
+        transition: all 0.15s ease;
+    }
+
+    .btn-puntos-submit:hover {
+        background-color: #1d4ed8 !important;
+        border-color: #1d4ed8 !important;
+    }
+
+    .btn-puntos-clear {
+        height: 36px !important;
+        padding: 0 14px !important;
+        font-size: 12px !important;
+        font-weight: 500 !important;
+        border-radius: 6px !important;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+        background-color: #f1f5f9 !important;
+        border: 1px solid #cbd5e1 !important;
+        color: #475569 !important;
+        transition: all 0.15s ease;
+    }
+
+    .btn-puntos-clear:hover {
+        background-color: #e2e8f0 !important;
+        color: #0f172a !important;
+    }
+
+    .puntos-help-text {
+        display: block;
+        font-size: 11px;
+        color: #94a3b8;
+        margin-top: 5px;
+    }
+
+    /* Client Profile Card */
+    .puntos-client-box {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 8px 4px;
+    }
+
+    .puntos-client-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+    }
+
+    .puntos-client-avatar {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: #f0fdf4;
+        border: 1.5px solid #86efac;
+        color: #16a34a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        flex-shrink: 0;
+    }
+
+    .puntos-client-titles h4 {
+        margin: 0;
+        font-size: 14.5px;
+        font-weight: 700;
+        color: #0f172a;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .puntos-client-titles p {
+        margin: 2px 0 0 0;
+        font-size: 11.5px;
+        color: #64748b;
+    }
+
+    .puntos-client-kpi {
+        text-align: right;
+        flex-shrink: 0;
+    }
+
+    .puntos-kpi-label {
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: #16a34a;
+        letter-spacing: 0.4px;
+        display: block;
+        margin-bottom: 2px;
+    }
+
+    .puntos-kpi-value {
+        font-size: 20px;
+        font-weight: 800;
+        color: #15803d;
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        border-radius: 8px;
+        padding: 3px 12px;
+        display: inline-block;
+        line-height: 1.2;
+    }
+
+    /* Empty states */
+    .puntos-empty-box {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 24px 16px;
+        color: #94a3b8;
+        font-size: 12.5px;
+        text-align: center;
+    }
+
+    .puntos-empty-box i {
+        font-size: 22px;
+        opacity: 0.6;
+    }
+
+    /* Results Table Card */
+    .puntos-results-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 20px 22px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+        margin-bottom: 20px;
+        width: 100%;
+    }
+
+    .puntos-results-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 14px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .puntos-results-title {
+        font-size: 15px;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .puntos-empty-history {
+        text-align: center;
+        padding: 36px 20px;
+        background: #f8fafc;
+        border: 1px dashed #cbd5e1;
+        border-radius: 10px;
+        margin: 10px 0;
+    }
+
+    .puntos-empty-history .empty-icon-wrap {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        color: #94a3b8;
+        margin-bottom: 12px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+
+    .puntos-empty-history h4 {
+        font-size: 14.5px;
+        font-weight: 700;
+        color: #1e293b;
+        margin: 0 0 4px 0;
+    }
+
+    .puntos-empty-history p {
+        font-size: 12.5px;
+        color: #64748b;
+        margin: 0;
+    }
+
+    .modern-table {
+        margin-top: 6px !important;
+        margin-bottom: 6px !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 8px !important;
+        overflow: hidden;
+    }
+
+    .modern-table thead th {
+        background-color: #f8fafc !important;
+        color: #475569 !important;
+        font-size: 11px !important;
+        font-weight: 700 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.5px !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        padding: 10px 14px !important;
+    }
+
+    .modern-table tbody td {
+        padding: 11px 14px !important;
+        font-size: 13px !important;
+        vertical-align: middle !important;
+        color: #1e293b !important;
+        border-top: 1px solid #f1f5f9 !important;
     }
 </style>
 
-<section class="content">
-    <div class="row equal-height-row">
-        <!-- Buscador (Izquierda) -->
-        <div class="col-md-6">
-            <div class="box box-primary">
-                <div class="box-header with-border">
-                    <h3 class="box-title"><i class="fa fa-search text-primary"></i> <strong>Búsqueda de Puntos</strong></h3>
+<!-- Page Header (Title + Subtitle) -->
+<div class="page-header-row">
+    <div class="page-header-left">
+        <div class="page-header-title-wrap">
+            <h1 class="modern-page-title">Puntos Obtenidos por Clientes</h1>
+        </div>
+        <p class="modern-page-subtitle">Consulte el saldo de puntos acumulados, bonificaciones e histórico de operaciones de fidelización de clientes.</p>
+    </div>
+</div>
+
+<!-- Formulario de Búsqueda y Datos de Cliente a Ancho Completo -->
+<div class="puntos-search-container">
+    <div class="puntos-search-grid">
+        <!-- Card 1: Búsqueda -->
+        <div class="puntos-card">
+            <div class="puntos-card-header">
+                <div class="puntos-header-icon icon-search">
+                    <i class="fa fa-search"></i>
                 </div>
-                <div class="box-body" style="padding: 20px 25px;">
-                    <form method="get" asp-action="Index">
-                        <div class="form-group" style="margin-bottom: 10px;">
-                            <label for="searchTerm" style="font-size: 15px; color: #555;">Criterio de búsqueda (DNI, Email o Tarjeta)</label>
-                            <div class="input-group input-group-lg">
-                                <div class="input-group-addon" style="background-color: #f8f9fa; border-right: 0;">
-                                    <i class="fa fa-id-card text-muted"></i>
-                                </div>
-                                <input type="text" id="searchTerm" name="searchTerm" class="form-control" placeholder="Ej: 12345678 o email@dominio.com" value="@ViewBag.SearchTerm" style="font-size: 16px; border-left: 0; box-shadow: none;" />
-                                <span class="input-group-btn">
-                                    <button type="submit" class="btn btn-primary btn-flat" style="padding-left: 20px; padding-right: 20px;"><i class="fa fa-search"></i> Buscar</button>
-                                    <a asp-action="Index" class="btn btn-default btn-flat">Limpiar</a>
-                                </span>
-                            </div>
-                        </div>
-                    </form>
+                <div class="puntos-header-info">
+                    <h4>Búsqueda de Puntos</h4>
+                    <p>Consulte por DNI, correo electrónico o tarjeta</p>
                 </div>
             </div>
+            <form method="get" asp-action="Index">
+                <div class="form-group puntos-form-group">
+                    <label for="searchTerm">Criterio de búsqueda (DNI, Email o Tarjeta)</label>
+                    <div class="puntos-input-wrapper">
+                        <input type="text" id="searchTerm" name="searchTerm" class="form-control puntos-input" placeholder="Ej: 12345678 o email@dominio.com" value="@ViewBag.SearchTerm" required autocomplete="off" />
+                        <button type="submit" class="btn btn-puntos-submit">
+                            <i class="fa fa-search"></i> Buscar
+                        </button>
+                        <a asp-action="Index" class="btn btn-puntos-clear" title="Limpiar búsqueda">
+                            Limpiar
+                        </a>
+                    </div>
+                    <span class="puntos-help-text"><i class="fa fa-info-circle"></i> Ingrese el documento sin puntos ni espacios.</span>
+                </div>
+            </form>
         </div>
 
-        <!-- Datos del Cliente (Derecha) -->
-        <div class="col-md-6">
+        <!-- Card 2: Datos del Cliente / Resumen de Puntos -->
+        <div class="puntos-card">
             @if (ViewBag.Usuario != null)
             {
                 var usuario = (DAL.Models.Usuario)ViewBag.Usuario;
-                var nombreCompleto = usuario.Personas != null ? $"{usuario.Personas.Nombres} {usuario.Personas.Apellido}" : "Sin nombre";
+                var nombreCompleto = usuario.Personas != null ? $"{usuario.Personas.Nombres} {usuario.Personas.Apellido}" : (usuario.UserName ?? "Sin nombre");
                 var documento = usuario.Personas?.NroDocumento ?? "N/A";
                 var email = usuario.UserName ?? "N/A";
                 var totalPuntos = Model != null ? Model.Sum(x => x.PuntosDisponibles) : 0;
 
-                <div class="box box-widget widget-user-2" style="box-shadow: 0 1px 3px rgba(0,0,0,0.15);">
-                    <div class="widget-user-header bg-green" style="padding: 15px 20px;">
-                        <div class="widget-user-image" style="float: left; margin-right: 15px;">
-                            <i class="fa fa-user-circle-o" style="font-size: 60px; color: rgba(255,255,255,0.9);"></i>
+                <div>
+                    <div class="puntos-card-header">
+                        <div class="puntos-header-icon icon-user">
+                            <i class="fa fa-user-check"></i>
                         </div>
-                        <h3 class="widget-user-username" style="margin-top: 5px; font-weight: 600; font-size: 22px;">@nombreCompleto</h3>
-                        <h5 class="widget-user-desc" style="opacity: 0.9; font-size: 14px; margin-top: 8px;">DNI: <strong>@documento</strong> &nbsp;|&nbsp; @email</h5>
+                        <div class="puntos-header-info">
+                            <h4>Cliente Identificado</h4>
+                            <p>Resumen de puntos y fidelización actual</p>
+                        </div>
                     </div>
-                    <div class="box-footer no-padding">
-                        <ul class="nav nav-stacked">
-                            <li>
-                                <a href="javascript:void(0);" style="font-size: 16px; padding: 13px 20px; cursor: default;">
-                                    <strong>Puntos Disponibles del Cliente</strong> 
-                                    <span class="pull-right badge bg-green" style="font-size: 18px; padding: 5px 15px;">@totalPuntos.ToString("N0", cultureArg)</span>
-                                </a>
-                            </li>
-                        </ul>
+                    <div class="puntos-client-box">
+                        <div class="puntos-client-left">
+                            <div class="puntos-client-avatar">
+                                <i class="fa fa-user"></i>
+                            </div>
+                            <div class="puntos-client-titles">
+                                <h4>@nombreCompleto</h4>
+                                <p>DNI: <strong>@documento</strong> &nbsp;|&nbsp; @email</p>
+                            </div>
+                        </div>
+                        <div class="puntos-client-kpi">
+                            <span class="puntos-kpi-label">Puntos Disponibles</span>
+                            <span class="puntos-kpi-value">@totalPuntos.ToString("N0", cultureArg)</span>
+                        </div>
                     </div>
                 </div>
             }
             else if (!string.IsNullOrEmpty(ViewBag.SearchTerm))
             {
-                <div class="box box-solid" style="background-color: #f4f4f4; border: 1px dashed #ccc; box-shadow: none;">
-                    <div class="box-body" style="padding: 35px; text-align: center;">
-                        <i class="fa fa-user-times text-muted fa-3x" style="margin-bottom: 15px; opacity: 0.5;"></i>
-                        <h4 style="margin: 0; color: #777; font-weight: 400;">No se encontraron clientes con esos datos.</h4>
+                <div>
+                    <div class="puntos-card-header">
+                        <div class="puntos-header-icon" style="background:#fef2f2; color:#dc2626; border:1px solid #fecaca;">
+                            <i class="fa fa-user-times"></i>
+                        </div>
+                        <div class="puntos-header-info">
+                            <h4>Sin Resultados</h4>
+                            <p>No se encontraron registros</p>
+                        </div>
+                    </div>
+                    <div class="puntos-empty-box" style="color: #b91c1c;">
+                        <i class="fa fa-exclamation-circle"></i>
+                        <span>No se encontraron clientes asociados al criterio: "<strong>@ViewBag.SearchTerm</strong>"</span>
                     </div>
                 </div>
             }
             else
             {
-                <div class="box box-solid" style="background-color: #f4f4f4; border: 1px dashed #ccc; box-shadow: none;">
-                    <div class="box-body" style="padding: 35px; text-align: center;">
-                        <i class="fa fa-search text-muted fa-3x" style="margin-bottom: 15px; opacity: 0.5;"></i>
-                        <h4 style="margin: 0; color: #777; font-weight: 400;">Realice una búsqueda para cargar los datos del cliente.</h4>
+                <div>
+                    <div class="puntos-card-header">
+                        <div class="puntos-header-icon" style="background:#f8fafc; color:#94a3b8; border:1px solid #e2e8f0;">
+                            <i class="fa fa-id-badge"></i>
+                        </div>
+                        <div class="puntos-header-info">
+                            <h4>Ficha del Cliente</h4>
+                            <p>Aguardando criterio de búsqueda</p>
+                        </div>
+                    </div>
+                    <div class="puntos-empty-box">
+                        <i class="fa fa-search"></i>
+                        <span>Realice una búsqueda para cargar la información y el saldo del cliente.</span>
                     </div>
                 </div>
             }
         </div>
     </div>
+</div>
 
-    @if (!string.IsNullOrEmpty(ViewBag.SearchTerm))
-    {
-        <!-- Tabla -->
-        <div class="row">
-            <div class="col-xs-12">
-                <div class="box box-success">
-                    <div class="box-header with-border">
-                        <h3 class="box-title" style="margin-top: 5px;"><i class="fa fa-list"></i> Historial de Operaciones</h3>
-                        <div class="box-tools pull-right">
-                            @if (ViewBag.Usuario != null)
-                            {
-                                <button type="button" class="btn btn-success btn-sm" data-toggle="modal" data-target="#modal-add-puntos">
-                                    <i class="fa fa-plus"></i> Cargar Puntos
-                                </button>
-                            }
-                        </div>
-                    </div>
-                    <div class="box-body table-responsive">
-                        <table id="historialTabla" class="table table-bordered table-hover table-striped">
-                            <thead>
-                                <tr>
-                                    <th>ID Operación</th>
-                                    <th>Monto Compra</th>
-                                    <th class="text-center">Compañía / Motivo</th>
-                                    <th class="text-center">Puntos Obtenidos</th>
-                                    <th class="text-center">Fecha de Compra</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @if (Model != null && Model.Any())
-                                {
-                                    foreach (var item in Model)
-                                    {
-                                        <tr>
-                                            <td style="vertical-align: middle;" class="text-muted">#@item.IdOperacion</td>
-                                            <td style="vertical-align: middle;" data-sort="@item.MontoCompra">@item.MontoCompra.ToString("C", cultureArg)</td>
-                                            <td style="vertical-align: middle;" class="text-center">@item.Compania</td>
-                                            <td style="vertical-align: middle;" class="text-center text-success" data-sort="@item.PuntosObtenidos">@item.PuntosObtenidos.ToString("N0", cultureArg)</td>
-                                            <td style="vertical-align: middle;" class="text-center" data-sort="@item.FechaCompra.ToString("yyyyMMddHHmmss")">
-                                                @item.FechaCompra.ToString("dd/MM/yyyy")
-                                            </td>
-                                        </tr>
-                                    }
-                                }
-                                else
-                                {
-                                    <tr>
-                                        <td colspan="5" class="text-center" style="padding: 30px;">
-                                            <i class="fa fa-inbox fa-3x text-muted" style="margin-bottom: 15px;"></i><br/>
-                                            @if (ViewBag.Usuario != null)
-                                            {
-                                                <span class="text-muted">El cliente no registra historial de operaciones de puntos.</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="text-muted">No se encontraron resultados para la búsqueda.</span>
-                                            }
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
+@if (!string.IsNullOrEmpty(ViewBag.SearchTerm))
+{
+    var usuarioEncontrado = ViewBag.Usuario as DAL.Models.Usuario;
+    var nombreCliente = usuarioEncontrado?.Personas != null ? $"{usuarioEncontrado.Personas.Nombres} {usuarioEncontrado.Personas.Apellido}" : (usuarioEncontrado?.UserName ?? "el cliente");
+
+    <!-- Tabla de Historial -->
+    <div class="puntos-results-card">
+        <div class="puntos-results-header">
+            <h3 class="puntos-results-title">
+                <i class="fa fa-list text-primary"></i> Historial de Operaciones
+            </h3>
+            @if (ViewBag.Usuario != null)
+            {
+                <button type="button" class="btn btn-success btn-sm" style="border-radius: 4px; font-weight: 500;" data-toggle="modal" data-target="#modal-add-puntos">
+                    <i class="fa fa-plus"></i> Cargar Puntos
+                </button>
+            }
         </div>
-    }
-</section>
+
+        @if (Model != null && Model.Any())
+        {
+            <div class="table-responsive">
+                <table id="historialTabla" class="table modern-table table-bordered table-hover table-striped">
+                    <thead>
+                        <tr>
+                            <th style="width: 120px;">ID Operación</th>
+                            <th>Monto Compra</th>
+                            <th class="text-center">Compañía / Motivo</th>
+                            <th class="text-center">Puntos Obtenidos</th>
+                            <th class="text-center">Fecha de Compra</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model)
+                        {
+                            <tr>
+                                <td style="vertical-align: middle;" class="text-muted">#@item.IdOperacion</td>
+                                <td style="vertical-align: middle;" data-sort="@item.MontoCompra">@item.MontoCompra.ToString("C", cultureArg)</td>
+                                <td style="vertical-align: middle;" class="text-center">@item.Compania</td>
+                                <td style="vertical-align: middle;" class="text-center text-success" data-sort="@item.PuntosObtenidos">@item.PuntosObtenidos.ToString("N0", cultureArg)</td>
+                                <td style="vertical-align: middle;" class="text-center" data-sort="@item.FechaCompra.ToString("yyyyMMddHHmmss")">
+                                    @item.FechaCompra.ToString("dd/MM/yyyy")
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="puntos-empty-history">
+                <div class="empty-icon-wrap">
+                    <i class="fa fa-inbox"></i>
+                </div>
+                <h4>Sin historial de operaciones</h4>
+                <p>El cliente <strong>@nombreCliente</strong> no registra operaciones ni movimientos de puntos hasta el momento.</p>
+                @if (ViewBag.Usuario != null)
+                {
+                    <button type="button" class="btn btn-success btn-sm" data-toggle="modal" data-target="#modal-add-puntos" style="margin-top: 14px; border-radius: 4px; font-weight: 500;">
+                        <i class="fa fa-plus"></i> Cargar Primeros Puntos
+                    </button>
+                }
+            </div>
+        }
+    </div>
+}
 
 <!-- Modal Agregar Puntos -->
 <div class="modal fade" id="modal-add-puntos" tabindex="-1" role="dialog" aria-labelledby="modalAddPuntosLabel">
     <div class="modal-dialog" role="document">
         <form method="post" asp-action="Create">
-            <div class="modal-content">
-                <div class="modal-header bg-green" style="color: white;">
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="color: white; opacity: 1;"><span aria-hidden="true">&times;</span></button>
-                    <h4 class="modal-title" id="modalAddPuntosLabel"><i class="fa fa-plus-circle"></i> Cargar Nuevos Puntos</h4>
+            <div class="modal-content" style="border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);">
+                <div class="modal-header" style="background: #16a34a; color: white; padding: 16px 20px;">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="color: white; opacity: 0.9;"><span aria-hidden="true">&times;</span></button>
+                    <h4 class="modal-title" id="modalAddPuntosLabel" style="font-size: 16px; font-weight: 700;"><i class="fa fa-plus-circle"></i> Cargar Nuevos Puntos</h4>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body" style="padding: 20px 24px;">
                     <!-- Parámetros Ocultos -->
                     <input type="hidden" name="SearchTerm" value="@ViewBag.SearchTerm" />
-                    @if (ViewBag.Usuario != null) {
+                    @if (ViewBag.Usuario != null)
+                    {
                         var usuario = (DAL.Models.Usuario)ViewBag.Usuario;
                         <input type="hidden" name="UsuarioId" value="@usuario.Id" />
                     }
                     
-                    <div class="form-group">
-                        <label>Monto de Compra</label>
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label style="font-size: 12px; font-weight: 600; color: #334155;">Monto de Compra</label>
                         <div class="input-group">
-                            <span class="input-group-addon">$</span>
-                            <input type="number" step="0.01" name="MontoCompra" class="form-control" required placeholder="Ej: 1500.50" />
+                            <span class="input-group-addon" style="background:#f8fafc; border-color:#cbd5e1;">$</span>
+                            <input type="number" step="0.01" name="MontoCompra" class="form-control" required placeholder="Ej: 1500.50" style="border-radius: 0 6px 6px 0 !important;" />
                         </div>
                     </div>
                     
-                    <div class="form-group">
-                        <label>Puntos Obtenidos</label>
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label style="font-size: 12px; font-weight: 600; color: #334155;">Puntos Obtenidos</label>
                         <div class="input-group">
-                            <span class="input-group-addon"><i class="fa fa-star text-green"></i></span>
-                            <input type="number" name="PuntosObtenidos" class="form-control" required placeholder="Ej: 15" />
+                            <span class="input-group-addon" style="background:#f8fafc; border-color:#cbd5e1;"><i class="fa fa-star text-green"></i></span>
+                            <input type="number" name="PuntosObtenidos" class="form-control" required placeholder="Ej: 15" style="border-radius: 0 6px 6px 0 !important;" />
                         </div>
                     </div>
 
-                    <div class="form-group">
-                        <label>Motivo de Carga</label>
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label style="font-size: 12px; font-weight: 600; color: #334155;">Motivo de Carga</label>
                         <div class="input-group">
-                            <span class="input-group-addon"><i class="fa fa-commenting-o"></i></span>
-                            <input type="text" name="Motivo" class="form-control" required placeholder="Ej: Bonificación, Compensación, etc." />
+                            <span class="input-group-addon" style="background:#f8fafc; border-color:#cbd5e1;"><i class="fa fa-commenting-o"></i></span>
+                            <input type="text" name="Motivo" class="form-control" required placeholder="Ej: Bonificación, Compensación, etc." style="border-radius: 0 6px 6px 0 !important;" />
                         </div>
                     </div>
                     
-                    <p class="text-muted" style="margin-top: 15px; margin-bottom: 0;"><small><i class="fa fa-info-circle"></i> Los demás campos se generarán automáticamente en el sistema (ID Operación, Fecha, etc).</small></p>
+                    <p class="text-muted" style="margin-top: 15px; margin-bottom: 0; font-size: 11px;"><i class="fa fa-info-circle text-primary"></i> Los demás campos se generarán automáticamente en el sistema (ID Operación, Fecha, etc).</p>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-default pull-left btn-flat" data-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success btn-flat"><i class="fa fa-save"></i> Guardar Puntos</button>
+                <div class="modal-footer" style="background: #f8fafc; border-top: 1px solid #f1f5f9; padding: 12px 20px;">
+                    <button type="button" class="btn btn-default btn-sm" data-dismiss="modal" style="border-radius: 4px;">Cancelar</button>
+                    <button type="submit" class="btn btn-success btn-sm" style="border-radius: 4px; font-weight: 500;"><i class="fa fa-save"></i> Guardar Puntos</button>
                 </div>
             </div>
         </form>
@@ -228,38 +610,69 @@
 @section Scripts {
     <script>
         $(function () {
-            $('#historialTabla').DataTable({
-                "paging": true,
-                "lengthChange": true,
-                "searching": true,
-                "ordering": true,
-                "order": [[4, "desc"]], /* Ordenar por la columna de fecha (índice 4) de forma descendente por defecto */
-                "info": true,
-                "autoWidth": false,
-                "language": {
-                    "url": "//cdn.datatables.net/plug-ins/1.10.20/i18n/Spanish.json"
-                },
-                "columnDefs": [
-                    {
-                        "targets": 2,
-                        "render": function (data, type, row) {
-                            if (type === 'display') {
-                                return '<span class="label label-primary" style="font-size: 13px;">' + data + '</span>';
+            if ($('#historialTabla').length > 0 && $('#historialTabla tbody tr').length > 0) {
+                $('#historialTabla').DataTable({
+                    "paging": true,
+                    "lengthChange": true,
+                    "searching": true,
+                    "ordering": true,
+                    "order": [[4, "desc"]],
+                    "info": true,
+                    "autoWidth": false,
+                    "columnDefs": [
+                        {
+                            "targets": 0,
+                            "render": function (data, type, row) {
+                                if (type === 'display' && data) {
+                                    var val = (data.indexOf('#') === 0) ? data : '#' + data;
+                                    return '<code style="font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; color: #475569; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">' + val + '</code>';
+                                }
+                                return data;
                             }
-                            return data;
+                        },
+                        {
+                            "targets": 2,
+                            "className": "text-center",
+                            "render": function (data, type, row) {
+                                if (type === 'display' && data) {
+                                    return '<span class="badge-pill badge-pill-blue">' + data + '</span>';
+                                }
+                                return data;
+                            }
+                        },
+                        {
+                            "targets": 3,
+                            "className": "text-center text-success",
+                            "render": function (data, type, row) {
+                                if (type === 'display' && data) {
+                                    var val = (data.indexOf('+') === 0) ? data : '+' + data;
+                                    return '<strong style="color: #16a34a; font-size: 13.5px;">' + val + '</strong>';
+                                }
+                                return data;
+                            }
+                        },
+                        {
+                            "targets": 4,
+                            "className": "text-center"
                         }
-                    },
-                    {
-                        "targets": 3,
-                        "render": function (data, type, row) {
-                            if (type === 'display') {
-                                return '<strong>' + data + '</strong>';
-                            }
-                            return data;
+                    ],
+                    "language": {
+                        "emptyTable": "No hay operaciones registradas",
+                        "info": "Mostrando _START_ a _END_ de _TOTAL_ operaciones",
+                        "infoEmpty": "Mostrando 0 a 0 de 0 operaciones",
+                        "infoFiltered": "(filtrado de _MAX_ operaciones)",
+                        "lengthMenu": "Mostrar _MENU_ registros",
+                        "search": "Buscar:",
+                        "zeroRecords": "No se encontraron operaciones coincidentes",
+                        "paginate": {
+                            "first": "Primero",
+                            "last": "Último",
+                            "next": "Siguiente",
+                            "previous": "Anterior"
                         }
                     }
-                ]
-            });
+                });
+            }
         });
     </script>
 }

@@ -8,13 +8,14 @@
     <div class="box-header with-border filtro-grilla">
         <span class="txt-titulo-box">Listado de Catálogo</span>
         <div class="pull-right" style="display: flex; align-items: center;">
-            <select id="marcaFiltroCatalogo" class="form-control" style="width: 250px; margin-right: 35px; display: inline-block;">
+            <select id="marcaFiltroCatalogo" class="form-control" style="width: 220px; display: inline-block;">
                 <option value="">Todas las Marcas</option>
                 @foreach (var m in marcas)
                 {
                     <option value="@m.Nombre">@m.Nombre</option>
                 }
             </select>
+            <button type="button" class="btn btn-default btn-sm btn-clear-filters" style="margin-left: 8px; margin-right: 15px;" title="Limpiar filtros"><i class="fa fa-eraser"></i> <span class="hidden-xs">Limpiar</span></button>
             <a onclick="nuevoCatalogo()" class="btn btn-info btn-sm">
                 <i class="fa fa-plus"><span class="hidden-xs"> Nuevo</span></i>
             </a>
@@ -91,8 +92,19 @@
 <modal title="Edición de Catálogo" callback-modal="true" function="editCatalogo" load-url="/Core/Catalogo/_Update/" size="Medium"></modal>
 
 <script>
+    var tablaCatalogo = null;
+    var storageMarcaCatalogoKey = 'portal_flt_' + window.location.pathname.toLowerCase().replace(/\/$/, '') + '_marcafiltrocatalogo';
+
     $(document).ready(function () {
-        var tablaCatalogo = $('#listadoCatalogo').DataTable({
+        var savedMarca = sessionStorage.getItem(storageMarcaCatalogoKey);
+        if (savedMarca !== null) {
+            try { savedMarca = JSON.parse(savedMarca); } catch (e) {}
+        }
+        if (savedMarca) {
+            $('#marcaFiltroCatalogo').val(savedMarca);
+        }
+
+        tablaCatalogo = $('#listadoCatalogo').DataTable({
             "columnDefs": [
                 { "width": "15%", "targets": 0 },
                 { "width": "30%", "searchable": false, "orderable": false, "targets": 1 },
@@ -104,9 +116,18 @@
             }
         });
 
+        if (savedMarca) {
+            tablaCatalogo.column(2).search('^' + $.fn.dataTable.util.escapeRegex(savedMarca) + ', true, false).draw();
+        }
+
         $('#marcaFiltroCatalogo').on('change', function () {
             var val = $(this).val();
-            tablaCatalogo.column(2).search(val ? '^' + $.fn.dataTable.util.escapeRegex(val) + '$' : '', true, false).draw();
+            if (val) {
+                sessionStorage.setItem(storageMarcaCatalogoKey, JSON.stringify(val));
+            } else {
+                sessionStorage.removeItem(storageMarcaCatalogoKey);
+            }
+            tablaCatalogo.column(2).search(val ? '^' + $.fn.dataTable.util.escapeRegex(val) + ' : '', true, false).draw();
         });
     });
 
@@ -118,8 +139,21 @@
             dataType: "json",
             success: function (data) {
                 if (data) {
-                    //location.reload("/Core/Catalogo/");
-                    $(location).attr('href', '/Core/Catalogo/');
+                    var $tr = $('#listadoCatalogo tbody tr').filter(function () {
+                        return $(this).find('a[onclick*="ActivarCatalogo(\'' + id + '\')"]').length > 0;
+                    });
+                    if ($tr.length && tablaCatalogo) {
+                        $tr.find('td').eq(3).html('<small class="label pull-center bg-green">Habilitado</small>');
+                        $tr.find('td').eq(4).find('a[onclick*="ActivarCatalogo"]').remove();
+                        tablaCatalogo.rows().invalidate().draw(false);
+                    }
+                    Swal.fire({
+                        title: "¡Habilitado!",
+                        text: "Catálogo activado correctamente.",
+                        icon: "success",
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
                 }
             },
             error: function (error) {
@@ -127,5 +161,4 @@
             }
         });
     }
-   
 </script>

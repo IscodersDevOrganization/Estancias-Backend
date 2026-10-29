@@ -1,13 +1,16 @@
-﻿@{
-    string link = "javascript:history.back()";
-
-    if (ViewData["BackArrow"] != null && ViewData["BackArrow"].ToString() != "")
-    {
-        link = ViewData["BackArrow"].ToString();
-    }
+@{
+    var title = ViewBag.Title ?? ViewData["Title"] ?? "";
+    var subtitle = ViewBag.SubTitle ?? ViewData["SubTitle"] ?? "";
 }
 
-<h1>
-    <a href="@link" title="Volver"><i class="fa fa-arrow-left"></i></a> @ViewBag.Title
-    <small>@ViewBag.SubTitle</small>
-</h1>
+<div class="page-header-row page-header-global">
+    <div class="page-header-left">
+        <div class="page-header-title-wrap">
+            <h1 class="modern-page-title">@title</h1>
+        </div>
+        @if (subtitle != null && !string.IsNullOrWhiteSpace(subtitle.ToString()))
+        {
+            <p class="modern-page-subtitle">@subtitle</p>
+        }
+    </div>
+</div>

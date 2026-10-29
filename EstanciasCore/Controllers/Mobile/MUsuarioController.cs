@@ -1501,6 +1501,7 @@ namespace EstanciasCore.Controllers
                     cliente.Celular = (Registro.Celular != null) ? Registro.Celular : "";
                     cliente.Localidad = _context.Localidad.Find(24860);
                     cliente.Provincia = _context.Provincia.Find(6);
+                    cliente.FechaIngreso = DateTime.Now;
 
                     DAL.Models.Persona personaLocal = _context.Personas.Where(x => x.Email==Registro.Mail.Trim()).FirstOrDefault();
 

@@ -39,9 +39,6 @@
                     <th>DNI</th>
                     <th>Teléfono</th>
                     <th>Email</th>
-                    <th>Fecha Nacimiento</th>
-                    <th>Domicilio</th>
-                    <th>CP</th>
                     <th>Fecha Solicitud</th>
                     <th class="text-center">Estado</th>
                     <th class="text-center">Nro. de Tarjeta</th>
@@ -52,16 +49,13 @@
                 @foreach (var item in Model)
                 {
                     var estadoId = item.Estado != null ? item.Estado.Id : 1;
-                    <tr data-estado-id="@estadoId">
+                    <tr data-id="@item.Id" data-estado-id="@estadoId">
                         <td>@Html.DisplayFor(modelItem => item.Nombre)</td>
                         <td>@Html.DisplayFor(modelItem => item.Apellido)</td>
                         <td>@Html.DisplayFor(modelItem => item.DNI)</td>
                         <td>@Html.DisplayFor(modelItem => item.Telefono)</td>
                         <td>@Html.DisplayFor(modelItem => item.Email)</td>
-                        <td>@item.FechaNacimiento.ToString("dd/MM/yyyy")</td>
-                        <td>@item.Calle @item.Altura @item.PisoDepto , @(item.Localidad!=null?item.Localidad.Descripcion:"") , @(item.Provincia!=null?item.Provincia.Descripcion:"")</td>
-                        <td>@item.CodigoPostal</td>
-                        <td>@item.FechaSolicitud.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td data-order="@item.FechaSolicitud.ToString("yyyyMMddHHmmss")">@item.FechaSolicitud.ToString("dd/MM/yyyy HH:mm")</td>
                         <td class="text-center">
                             @if (estadoId == 2)
                             {
@@ -104,11 +98,16 @@
 <modal title="Nueva Solicitud de Tarjeta" callback-modal="true" function="nuevaSolicitud" load-url="/Core/SolicitudDeTarjeta/_Create/" size="Medium"></modal>
 <modal title="Edición de Solicitud de Tarjeta" callback-modal="true" function="editarSolicitud" load-url="/Core/SolicitudDeTarjeta/_Edit/" size="Medium"></modal>
 <modal title="Aprobar Solicitud de Tarjeta" callback-modal="true" function="aprobarSolicitud" load-url="/Core/SolicitudDeTarjeta/_Aprobar/" size="Medium"></modal>
-<modal title="Adjuntos de Solicitud de Tarjeta" callback-modal="true" function="verAdjuntos" load-url="/Core/SolicitudDeTarjeta/_VerAdjuntos/" size="Large"></modal>
+<modal title="Datos y Adjuntos de Solicitud de Tarjeta" callback-modal="true" function="verAdjuntos" load-url="/Core/SolicitudDeTarjeta/_VerAdjuntos/" size="Large"></modal>
 
 <script>
+    var tableSolicitudes = null;
+    var storageFiltroKey = 'portal_flt_' + window.location.pathname.toLowerCase().replace(/\/$/, '') + '_filtroestado';
+
     function confirmarRechazar(e, url) {
-        e.preventDefault();
+        if (e && e.preventDefault) e.preventDefault();
+        var $tr = $(e.target).closest('tr');
+
         Swal.fire({
             title: "¿Desea rechazar esta solicitud?",
             text: "Se enviará un correo informando que no cumple con los requisitos mínimos para dar el alta.",
@@ -120,13 +119,51 @@
             cancelButtonText: "Cancelar"
         }).then((result) => {
             if (result.isConfirmed) {
-                window.location.href = url;
+                Swal.fire({
+                    title: "Procesando rechazo...",
+                    text: "Por favor espere mientras se envía el correo.",
+                    allowOutsideClick: false,
+                    didOpen: () => { Swal.showLoading(); }
+                });
+
+                $.ajax({
+                    url: url,
+                    type: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    success: function (res) {
+                        if (res && res.success) {
+                            $tr.attr('data-estado-id', '3');
+                            $tr.find('td').eq(6).html('<span class="label label-danger" style="background-color: #dd4b39; font-size: 11px; padding: 4px 8px;">Rechazada</span>');
+                            var id = $tr.attr('data-id');
+                            $tr.find('td').eq(8).html('<a href="javascript:void(0)" onclick="verAdjuntos(' + id + ')" title="Ver Adjuntos" class="btn btn-info btn-xs"><i class="fa fa-image"></i></a>');
+
+                            if (tableSolicitudes) {
+                                tableSolicitudes.rows().invalidate().draw(false);
+                            }
+
+                            Swal.fire({
+                                title: "¡Rechazada!",
+                                text: res.message || "La solicitud fue rechazada correctamente.",
+                                icon: "success",
+                                timer: 2500,
+                                showConfirmButton: false
+                            });
+                        } else {
+                            Swal.fire("Error", (res && res.message) ? res.message : "No se pudo rechazar la solicitud.", "error");
+                        }
+                    },
+                    error: function () {
+                        Swal.fire("Error", "Ocurrió un error al procesar la solicitud.", "error");
+                    }
+                });
             }
         });
     }
 
     function confirmarNuevaRevision(e, url) {
-        e.preventDefault();
+        if (e && e.preventDefault) e.preventDefault();
+        var $tr = $(e.target).closest('tr');
+
         Swal.fire({
             title: "¿Solicitar Nueva Revisión?",
             text: "Se enviará un correo solicitando la documentación necesaria para validar la solicitud y se cambiará su estado a 'Nueva Revisión'.",
@@ -138,13 +175,49 @@
             cancelButtonText: "Cancelar"
         }).then((result) => {
             if (result.isConfirmed) {
-                window.location.href = url;
+                Swal.fire({
+                    title: "Solicitando nueva revisión...",
+                    text: "Por favor espere mientras se envía la notificación.",
+                    allowOutsideClick: false,
+                    didOpen: () => { Swal.showLoading(); }
+                });
+
+                $.ajax({
+                    url: url,
+                    type: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    success: function (res) {
+                        if (res && res.success) {
+                            $tr.attr('data-estado-id', '4');
+                            $tr.find('td').eq(6).html('<span class="label label-warning" style="background-color: #f39c12; font-size: 11px; padding: 4px 8px;">Nueva Revisión</span>');
+
+                            if (tableSolicitudes) {
+                                tableSolicitudes.rows().invalidate().draw(false);
+                            }
+
+                            Swal.fire({
+                                title: "¡Nueva Revisión!",
+                                text: res.message || "La solicitud fue puesta en Nueva Revisión.",
+                                icon: "success",
+                                timer: 2500,
+                                showConfirmButton: false
+                            });
+                        } else {
+                            Swal.fire("Error", (res && res.message) ? res.message : "No se pudo actualizar la solicitud.", "error");
+                        }
+                    },
+                    error: function () {
+                        Swal.fire("Error", "Ocurrió un error al solicitar nueva revisión.", "error");
+                    }
+                });
             }
         });
     }
 
     function confirmarEliminar(e, url) {
-        e.preventDefault();
+        if (e && e.preventDefault) e.preventDefault();
+        var $tr = $(e.target).closest('tr');
+
         Swal.fire({
             title: "¿Está seguro?",
             text: "¿Desea borrar esta solicitud?",
@@ -156,15 +229,53 @@
             cancelButtonText: "Cancelar"
         }).then((result) => {
             if (result.isConfirmed) {
-                window.location.href = url;
+                Swal.fire({
+                    title: "Eliminando...",
+                    allowOutsideClick: false,
+                    didOpen: () => { Swal.showLoading(); }
+                });
+
+                $.ajax({
+                    url: url,
+                    type: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    success: function (res) {
+                        if (res && res.success) {
+                            if (tableSolicitudes) {
+                                tableSolicitudes.row($tr).remove().draw(false);
+                            } else {
+                                $tr.remove();
+                            }
+
+                            Swal.fire({
+                                title: "¡Eliminada!",
+                                text: res.message || "Solicitud de tarjeta eliminada correctamente.",
+                                icon: "success",
+                                timer: 2000,
+                                showConfirmButton: false
+                            });
+                        } else {
+                            Swal.fire("Error", (res && res.message) ? res.message : "No se pudo eliminar la solicitud.", "error");
+                        }
+                    },
+                    error: function () {
+                        Swal.fire("Error", "Ocurrió un error al eliminar la solicitud.", "error");
+                    }
+                });
             }
         });
     }
 
     $(document).ready(function () {
-        var table = $('#listadoSolicitudes').DataTable({
+        var savedFilter = sessionStorage.getItem(storageFiltroKey);
+        if (savedFilter !== null) {
+            try { savedFilter = JSON.parse(savedFilter); } catch(e) {}
+        }
+
+        tableSolicitudes = $('#listadoSolicitudes').DataTable({
+            "order": [[5, "desc"]],
             "columnDefs": [
-                { "orderable": false, "searchable": false, "className": "text-center", "targets": [10, 11] }
+                { "orderable": false, "searchable": false, "className": "text-center", "targets": [7, 8] }
             ],
             "language": {
                 'url': '@Url.Content("~/lib/arg.json")'
@@ -183,24 +294,154 @@
                     </label>
                 `;
                 $('#listadoSolicitudes_filter').prepend(filterHtml);
+
+                if (savedFilter) {
+                    $('#filtroEstado').val(savedFilter);
+                    tableSolicitudes.draw(false);
+                }
             }
         });
 
         // Filtro personalizado por EstadoId
         $.fn.dataTable.ext.search.push(
             function (settings, data, dataIndex) {
+                if (!settings || !settings.nTable || settings.nTable.id !== 'listadoSolicitudes') {
+                    return true;
+                }
                 var selectedEstado = $('#filtroEstado').val();
+                if (!selectedEstado && savedFilter) {
+                    selectedEstado = savedFilter;
+                }
                 if (!selectedEstado) {
                     return true;
                 }
-                var rowNode = table.row(dataIndex).node();
+                var rowNode = tableSolicitudes.row(dataIndex).node();
                 var rowEstadoId = $(rowNode).attr('data-estado-id');
                 return rowEstadoId === selectedEstado;
             }
         );
 
         $(document).on('change', '#filtroEstado', function () {
-            table.draw();
+            var val = $(this).val();
+            savedFilter = val;
+            if (val) {
+                sessionStorage.setItem(storageFiltroKey, JSON.stringify(val));
+            } else {
+                sessionStorage.removeItem(storageFiltroKey);
+            }
+            tableSolicitudes.draw();
+        });
+
+        // Interceptar envío modal Aprobar Solicitud
+        $(document).on('submit', 'form[action*="_Aprobar"]', function (e) {
+            e.preventDefault();
+            var form = $(this);
+            var id = form.find('input[name="Id"]').val();
+            var tarjeta = form.find('input[name="NumeroTarjeta"]').val();
+
+            Swal.fire({
+                title: "Aprobando solicitud...",
+                text: "Por favor espere mientras se envía el correo.",
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+
+            $.ajax({
+                url: form.attr('action'),
+                type: 'POST',
+                data: form.serialize(),
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                success: function (res) {
+                    if (res && res.success) {
+                        form.closest('.modal').modal('hide');
+
+                        var $row = $('#listadoSolicitudes tbody tr').filter(function () {
+                            return $(this).attr('data-id') === String(id)
+                                || $(this).find('a[onclick*="aprobarSolicitud(' + id + ')"]').length > 0;
+                        });
+
+                        if ($row.length) {
+                            $row.attr('data-estado-id', '2');
+                            $row.find('td').eq(6).html('<span class="label label-success" style="background-color: #00a65a; font-size: 11px; padding: 4px 8px;">Aprobada</span>');
+                            $row.find('td').eq(7).text(res.numeroTarjeta || tarjeta || '-');
+                            $row.find('td').eq(8).html('<a href="javascript:void(0)" onclick="verAdjuntos(' + id + ')" title="Ver Adjuntos" class="btn btn-info btn-xs"><i class="fa fa-image"></i></a>');
+
+                            tableSolicitudes.rows().invalidate().draw(false);
+                        }
+
+                        Swal.fire({
+                            title: "¡Aprobada!",
+                            text: res.message || "La solicitud fue aprobada correctamente.",
+                            icon: "success",
+                            timer: 2500,
+                            showConfirmButton: false
+                        });
+                    } else {
+                        Swal.fire("Error", (res && res.message) ? res.message : "No se pudo aprobar la solicitud.", "error");
+                    }
+                },
+                error: function () {
+                    Swal.fire("Error", "Ocurrió un error al procesar la aprobación.", "error");
+                }
+            });
+        });
+
+        // Interceptar envío modal Editar Solicitud
+        $(document).on('submit', 'form[action*="_Edit"]', function (e) {
+            e.preventDefault();
+            var form = $(this);
+            var id = form.find('input[name="Id"]').val();
+
+            Swal.fire({
+                title: "Guardando cambios...",
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+
+            $.ajax({
+                url: form.attr('action'),
+                type: 'POST',
+                data: form.serialize(),
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                success: function (res) {
+                    if (res && res.success) {
+                        form.closest('.modal').modal('hide');
+
+                        var $row = $('#listadoSolicitudes tbody tr').filter(function () {
+                            return $(this).attr('data-id') === String(id)
+                                || $(this).find('a[onclick*="editarSolicitud(' + id + ')"]').length > 0;
+                        });
+
+                        if ($row.length) {
+                            if (res.nombre) $row.find('td').eq(0).text(res.nombre);
+                            if (res.apellido) $row.find('td').eq(1).text(res.apellido);
+                            if (res.dni) $row.find('td').eq(2).text(res.dni);
+                            if (res.telefono) $row.find('td').eq(3).text(res.telefono);
+                            if (res.email) $row.find('td').eq(4).text(res.email);
+
+                            tableSolicitudes.rows().invalidate().draw(false);
+                        }
+
+                        Swal.fire({
+                            title: "¡Actualizado!",
+                            text: res.message || "Solicitud de tarjeta actualizada correctamente.",
+                            icon: "success",
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    } else {
+                        if (typeof res === 'string' && res.indexOf('<form') > -1) {
+                            form.closest('.modal-body').html(res);
+                            Swal.close();
+                        } else {
+                            Swal.fire("Error", (res && res.message) ? res.message : "Error al guardar los cambios.", "error");
+                        }
+                    }
+                },
+                error: function () {
+                    Swal.fire("Error", "Ocurrió un error al guardar los cambios.", "error");
+                }
+            });
         });
     });
 </script>

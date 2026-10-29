@@ -42,20 +42,24 @@ namespace EstanciasCore.Controllers
         }
         public IActionResult ObtenerBanners(Page<Banners> page)
         {
-
             var usuario = _context.Usuarios.FirstOrDefault(x => x.Email == User.Identity.Name);
-            if(usuario== null || usuario.Clientes?.Empresa == null)
+            var query = _context.Banners.Include(x => x.Marcas).AsQueryable();
+            if (usuario == null || usuario.Clientes?.Empresa == null)
             {
-                page.SelectPage("/Banners/ObtenerBanners", 
-                    _context.Banners.Include(x => x.Marcas).Where(x => x.Empresa == null && (x.Titulo.Contains(page.SearchText) || x.Texto.Contains(page.SearchText)))
-                );
+                query = query.Where(x => x.Empresa == null);
             }
             else
             {
-                page.SelectPage("/Banners/ObtenerBanners",
-                    _context.Banners.Include(x => x.Marcas).Where(x => x.Empresa.Id == usuario.Clientes.Empresa.Id && (x.Titulo.Contains(page.SearchText) || x.Texto.Contains(page.SearchText)))
-                );
+                query = query.Where(x => x.Empresa.Id == usuario.Clientes.Empresa.Id);
             }
+            if (!string.IsNullOrEmpty(page.SearchText))
+            {
+                query = query.Where(x => x.Titulo.Contains(page.SearchText) || x.Texto.Contains(page.SearchText));
+            }
+
+            var c = query.Count();
+            if (c < 1) { c = 1; }
+            page.SelectPage("/Banners/ObtenerBanners", query.OrderBy(x => x.Orden).ThenBy(x => x.Marcas != null ? x.Marcas.Nombre : ""), c);
             return PartialView("_ListadoBanners", page);
         }
 

@@ -1,173 +1,217 @@
 @using DAL.Models
+@using Microsoft.EntityFrameworkCore
+@using System.Collections.Generic
+@using System.Linq
 @inject DAL.Data.EstanciasContext _context
 @model Commons.Models.Page<DAL.Models.Banners>
 @{
     var marcas = _context.Marcas.Where(x => x.Activo).OrderBy(x => x.Orden).ToList();
+    var items = Model != null && Model.Items != null && Model.Items.Any()
+        ? Model.Items.OrderBy(x => x.Orden).ThenBy(x => x.Marcas != null ? x.Marcas.Nombre : "").ToList()
+        : _context.Banners.Include(x => x.Marcas).OrderBy(x => x.Orden).ThenBy(x => x.Marcas != null ? x.Marcas.Nombre : "").ToList();
 }
 
-<box-header title="Listado">
-    <box-search update-div="tablaBanners">
-        <div class="pull-right" style="display: flex; align-items: center;">
-            <select id="marcaFiltroBanners" class="form-control" style="width: 250px; margin-right: 35px; display: inline-block;">
+<div class="box box-info">
+    <div class="box-header with-border filtro-grilla">
+        <span class="txt-titulo-box">Listado de Banners</span>
+        <div class="pull-right" style="display: flex; align-items: center; gap: 8px;">
+            <select id="marcaFiltroBanners" class="form-control" style="width: 220px; display: inline-block;">
                 <option value="">Todas las Marcas</option>
                 @foreach (var m in marcas)
                 {
                     <option value="@m.Nombre">@m.Nombre</option>
                 }
             </select>
+            <button type="button" class="btn btn-default btn-sm btn-clear-filters" title="Limpiar filtros">
+                <i class="fa fa-eraser"></i> <span class="hidden-xs">Limpiar</span>
+            </button>
             <a onclick="nuevoBanner()" class="btn btn-info btn-sm">
                 <i class="fa fa-plus"><span class="hidden-xs"> Nuevo</span></i>
             </a>
         </div>
-    </box-search>
-</box-header>
-<box-body table="true">
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th>
-                    Titulo
-                </th>
-                <th>
-                    Fecha Desde
-                </th>
-                <th>
-                    Fecha Hasta
-                </th>
-                <th>
-                    Orden
-                </th>
-                <th>
-                    Marca
-                </th>
-                <th>
-                    Link Externo
-                </th>
-                <th>
-                    Es Carrousel
-                </th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var item in Model.Items.OrderBy(x => x.Fecha))
-            {
-                <tr class="banner-row" data-marca="@(item.Marcas != null ? item.Marcas.Nombre : "")">
-                    <td>
-                        @Html.DisplayFor(modelItem => item.Titulo)
-                    </td>
-                 <td>
-                     @item.FechaDesde.ToString("dd/MM/yyyy")
-                 </td>
-                <td class=" pull-center">
-                    @if (item.Vencimiento)
-                    {
-                        @Html.DisplayFor(modelItem => item.FechaHasta)
-                    }
-                    else
-                    {
-                        @Html.Raw("Sin Dato")
-                    }
-                </td>
-                 <td>
-                     @Html.DisplayFor(modelItem => item.Orden)
-                 </td>
-                 <td>
-                     @if (item.Marcas != null)
-                     {
-                         @item.Marcas.Nombre
-                     }
-                     else
-                     {
-                         <span class="text-muted">Sin Marca</span>
-                     }
-                 </td>
-                 <td>
-                        @if (item.LinkExterno)
-                        {
-                            @Html.Raw("Si")
-                        }
-                        else
-                        {
-                            @Html.Raw("No")
-                        }
-                 </td>
-                 <td>
-                        @if (item.EsCarrousel)
-                        {
-                            @Html.Raw("Si")
-                        }
-                        else
-                        {
-                            @Html.Raw("No")
-                        }
-                 </td>
-                 <td>
-                     <a onclick="editBanner(@item.Id)" title="Edita" class="btn btn-primary btn-xs"><i class="fa fa-file-text-o"></i></a>
-                     <a onclick="cambiarOrdenPromocion(@item.Id)" title="Cambiar Orden" class="btn btn-primary btn-xs"><i class="fa fa-sort-numeric-asc"></i></a>
-
-                        @if (item.EsVideo)
-                        {
-                            if (item.Video != null)
+    </div>
+    <div class="box-body">
+        <table id="listadoBanners" class="table table-hover table-bordered table-responsive borde_interno">
+            <thead>
+                <tr>
+                    <th>
+                        Titulo
+                    </th>
+                    <th>
+                        Fecha Desde
+                    </th>
+                    <th>
+                        Fecha Hasta
+                    </th>
+                    <th>
+                        Orden
+                    </th>
+                    <th>
+                        Marca
+                    </th>
+                    <th>
+                        Link Externo
+                    </th>
+                    <th>
+                        Es Carrousel
+                    </th>
+                    <th>
+                        Acciones
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in items)
+                {
+                    <tr class="banner-row" data-marca="@(item.Marcas != null ? item.Marcas.Nombre : "")">
+                        <td>
+                            @Html.DisplayFor(modelItem => item.Titulo)
+                        </td>
+                        <td data-order="@item.FechaDesde.ToString("yyyyMMdd")">
+                            @item.FechaDesde.ToString("dd/MM/yyyy")
+                        </td>
+                        <td data-order="@(item.FechaHasta.HasValue ? item.FechaHasta.Value.ToString("yyyyMMdd") : "00000000")" class="text-center">
+                            @if (item.Vencimiento)
                             {
-                                <a onclick="imagen(@item.Id)" title="No ha ingresado Foto" class="btn btn-danger btn-xs">
-                                    <i class="fa fa-image"></i>
-                                    <i class="fa fa-exclamation"></i>
-                                </a>
-                                <a onclick="video(@item.Id)" title="Editar Video" class="btn btn-primary btn-xs"><i class="fa fa-film"></i></a>
+                                @Html.DisplayFor(modelItem => item.FechaHasta)
                             }
                             else
                             {
-                                <a onclick="imagen(@item.Id)" title="No ha ingresado Foto" class="btn btn-danger btn-xs">
-                                    <i class="fa fa-image"></i>
-                                    <i class="fa fa-exclamation"></i>
-                                </a>
-                                <a onclick="video(@item.Id)" title="No ha ingresado un Video" class="btn btn-danger btn-xs">
-                                    <i class="fa fa-film"></i>
-                                    <i class="fa fa-exclamation"></i>
-                                </a>
-
+                                @Html.Raw("Sin Dato")
                             }
-
-                        }
-                        else
-                        {
-                            
-                            if(item.Foto != null)
+                        </td>
+                        <td data-order="@item.Orden" class="text-center">
+                            @Html.DisplayFor(modelItem => item.Orden)
+                        </td>
+                        <td>
+                            @if (item.Marcas != null)
                             {
-                                <a onclick="imagen(@item.Id)" title="Editar Foto" class="btn btn-primary btn-xs"><i class="fa fa-image"></i></a>
-                                         <a onclick="video(@item.Id)" title="No ha ingresado un Video" class="btn btn-danger btn-xs">
-                                <i class="fa fa-film"></i>
-                                <i class="fa fa-exclamation"></i>
-                                </a> 
+                                @item.Marcas.Nombre
                             }
                             else
                             {
-                                <a onclick="imagen(@item.Id)" title="No ha ingresado Foto" class="btn btn-danger btn-xs">
-                                    <i class="fa fa-image"></i>
-                                    <i class="fa fa-exclamation"></i>
-                                </a>
-                                <a onclick="video(@item.Id)" title="No ha ingresado un Video" class="btn btn-danger btn-xs">
-                                    <i class="fa fa-film"></i>
-                                    <i class="fa fa-exclamation"></i>
-                                </a> 
+                                <span class="text-muted">Sin Marca</span>
                             }
-                        }   
-                     <a onclick="borrarBanner(@item.Id)" title="Borrar Banner" class="btn btn-danger btn-xs"><i class="fa fa-trash"></i></a>
-                 </td>
-             </tr>
-            }
-        </tbody>
-    </table>
+                        </td>
+                        <td class="text-center">
+                            @if (item.LinkExterno)
+                            {
+                                @Html.Raw("Si")
+                            }
+                            else
+                            {
+                                @Html.Raw("No")
+                            }
+                        </td>
+                        <td class="text-center">
+                            @if (item.EsCarrousel)
+                            {
+                                @Html.Raw("Si")
+                            }
+                            else
+                            {
+                                @Html.Raw("No")
+                            }
+                        </td>
+                        <td class="text-center">
+                            <a onclick="editBanner(@item.Id)" title="Edita" class="btn btn-primary btn-xs"><i class="fa fa-file-text-o"></i></a>
+                            <a onclick="cambiarOrdenPromocion(@item.Id)" title="Cambiar Orden" class="btn btn-primary btn-xs"><i class="fa fa-sort-numeric-asc"></i></a>
 
-</box-body>
-<box-footer page-update-div="tablaBanners"></box-footer>
+                            @if (item.EsVideo)
+                            {
+                                if (item.Video != null)
+                                {
+                                    <a onclick="imagen(@item.Id)" title="No ha ingresado Foto" class="btn btn-danger btn-xs">
+                                        <i class="fa fa-image"></i>
+                                        <i class="fa fa-exclamation"></i>
+                                    </a>
+                                    <a onclick="video(@item.Id)" title="Editar Video" class="btn btn-primary btn-xs"><i class="fa fa-film"></i></a>
+                                }
+                                else
+                                {
+                                    <a onclick="imagen(@item.Id)" title="No ha ingresado Foto" class="btn btn-danger btn-xs">
+                                        <i class="fa fa-image"></i>
+                                        <i class="fa fa-exclamation"></i>
+                                    </a>
+                                    <a onclick="video(@item.Id)" title="No ha ingresado un Video" class="btn btn-danger btn-xs">
+                                        <i class="fa fa-film"></i>
+                                        <i class="fa fa-exclamation"></i>
+                                    </a>
+                                }
+                            }
+                            else
+                            {
+                                if (item.Foto != null)
+                                {
+                                    <a onclick="imagen(@item.Id)" title="Editar Foto" class="btn btn-primary btn-xs"><i class="fa fa-image"></i></a>
+                                    <a onclick="video(@item.Id)" title="No ha ingresado un Video" class="btn btn-danger btn-xs">
+                                        <i class="fa fa-film"></i>
+                                        <i class="fa fa-exclamation"></i>
+                                    </a>
+                                }
+                                else
+                                {
+                                    <a onclick="imagen(@item.Id)" title="No ha ingresado Foto" class="btn btn-danger btn-xs">
+                                        <i class="fa fa-image"></i>
+                                        <i class="fa fa-exclamation"></i>
+                                    </a>
+                                    <a onclick="video(@item.Id)" title="No ha ingresado un Video" class="btn btn-danger btn-xs">
+                                        <i class="fa fa-film"></i>
+                                        <i class="fa fa-exclamation"></i>
+                                    </a>
+                                }
+                            }
+                            <a onclick="borrarBanner(@item.Id)" title="Borrar Banner" class="btn btn-danger btn-xs"><i class="fa fa-trash"></i></a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
 <modal title="Edición de Banner" function="editBanner" load-url="/Core/Banners/Update/" size="Medium"></modal>
 <modal title="Nuevo Banner" function="nuevoBanner" load-url="/Core/Banners/Create/" size="Medium"></modal>
 <modal title="Cambiar Foto" function="imagen" load-url="/Core/Banners/_CambiarImagen/" size="Medium"></modal>
 <modal title="Cambiar Video" function="video" load-url="/Core/Banners/_CambiarVideo/" size="Medium"></modal>
 
-
 <script>
+    var tablaBanners = null;
+    var storageMarcaBannersKey = 'portal_flt_' + window.location.pathname.toLowerCase().replace(/\/$/, '') + '_marcafiltrobanners';
+
+    $(document).ready(function () {
+        var savedMarca = sessionStorage.getItem(storageMarcaBannersKey);
+        if (savedMarca !== null) {
+            try { savedMarca = JSON.parse(savedMarca); } catch (e) {}
+        }
+        if (savedMarca) {
+            $('#marcaFiltroBanners').val(savedMarca);
+        }
+
+        tablaBanners = $('#listadoBanners').DataTable({
+            "order": [[3, "asc"], [4, "asc"]],
+            "columnDefs": [
+                { "orderable": false, "searchable": false, "className": "text-center", "targets": 7 }
+            ],
+            "language": {
+                'url': '@Url.Content("~/lib/arg.json")'
+            }
+        });
+
+        if (savedMarca) {
+            tablaBanners.column(4).search('^' + $.fn.dataTable.util.escapeRegex(savedMarca) + '$', true, false).draw();
+        }
+
+        $('#marcaFiltroBanners').on('change', function () {
+            var val = $(this).val();
+            if (val) {
+                sessionStorage.setItem(storageMarcaBannersKey, JSON.stringify(val));
+            } else {
+                sessionStorage.removeItem(storageMarcaBannersKey);
+            }
+            tablaBanners.column(4).search(val ? '^' + $.fn.dataTable.util.escapeRegex(val) + '$' : '', true, false).draw();
+        });
+    });
 
     borrarBanner = (id) => {
         Swal.fire({
@@ -179,34 +223,41 @@
             cancelButtonText: "Cancelar",
             denyButtonText: `Borrar`
         }).then((result) => {
-           if (result.isDenied) {
+            if (result.isDenied) {
                 $.ajax({
-                    url: '/Core/Banners/Delete/' + id,  // Ruta del controlador y método
+                    url: '/Core/Banners/Delete/' + id,
                     type: 'GET',
                     dataType: 'json',
                     success: function (response) {
-                        console.log(response)
-                        if(response){
-                            //Swal.fire("Borrado con éxito.", "", "success");
-                            location.reload();
-                        }else{
-
+                        if (response) {
+                            var $tr = $('#listadoBanners tbody tr').filter(function () {
+                                return $(this).find('a[onclick*="borrarBanner(' + id + ')"]').length > 0;
+                            });
+                            if ($tr.length && tablaBanners) {
+                                tablaBanners.row($tr).remove().draw(false);
+                            } else {
+                                location.reload();
+                            }
+                            Swal.fire({
+                                title: "¡Borrado!",
+                                text: "El banner fue eliminado correctamente.",
+                                icon: "success",
+                                timer: 2000,
+                                showConfirmButton: false
+                            });
+                        } else {
                             Swal.fire("Error al borrar.", "", "warning");
                         }
                     },
                     error: function (error) {
-                        // Manejo de errores
                         Swal.fire("Error al borrar.", "", "warning");
                     }
                 });
-
-                
             }
         });
-    }
+    };
 
     cambiarOrdenPromocion = (id) => {
-
         Swal.fire({
             title: '¿Modificar orden del Banner?',
             text: 'Ingrese un número de orden',
@@ -219,7 +270,6 @@
             cancelButtonColor: "#d33",
             icon: 'question',
             iconColor: 'LightSkyBlue',
-            showCancelButton: true,
             cancelButtonText: 'No',
         }).then(function (result) {
             if (result.isConfirmed) {
@@ -229,13 +279,19 @@
                         url: '/Core/Banners/ModificarOrden',
                         data: { Id: id, Orden: result.value },
                         success: function (data) {
+                            var $tr = $('#listadoBanners tbody tr').filter(function () {
+                                return $(this).find('a[onclick*="cambiarOrdenPromocion(' + id + ')"]').length > 0;
+                            });
+                            if ($tr.length && tablaBanners) {
+                                $tr.find('td').eq(3).text(result.value).attr('data-order', result.value);
+                                tablaBanners.rows().invalidate().draw(false);
+                            }
                             Swal.fire({
-                                title: 'Correcto!',
+                                title: '¡Correcto!',
                                 text: 'Se Modificó el Orden',
                                 icon: 'success',
-                                showConfirmButton: true,
-                            }).then(function (result) {
-                                window.location.href = '/Core/Banners/'
+                                timer: 2000,
+                                showConfirmButton: false
                             });
                         },
                         error: function (XHR) {
@@ -253,7 +309,7 @@
                                 });
                             }
                         }
-                    })
+                    });
                 } else {
                     Swal.fire({
                         text: "Debe Ingresar una Observación",
@@ -262,20 +318,6 @@
                     });
                 }
             }
-
         });
-
-    }
-
-    $(document).ready(function () {
-        $('#marcaFiltroBanners').on('change', function () {
-            var val = $(this).val();
-            if (val) {
-                $('.banner-row').hide();
-                $('.banner-row[data-marca="' + val + '"]').show();
-            } else {
-                $('.banner-row').show();
-            }
-        });
-    });
+    };
 </script>

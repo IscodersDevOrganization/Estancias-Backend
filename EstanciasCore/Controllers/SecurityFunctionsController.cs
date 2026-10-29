@@ -110,7 +110,8 @@ namespace EstanciasCore.Controllers
                     function.LastEditTime = DateTime.Now;
                     function.Display = true;
                     function.Show = true;
-                    function.RoutesJson = JsonConvert.SerializeObject(selectedRoutes ?? new List<string>());
+                    var routeObjs = (selectedRoutes ?? new List<string>()).Select(r => new CommonsRoute(r)).ToList();
+                    function.RoutesJson = JsonConvert.SerializeObject(routeObjs);
 
                     await _context.Set<CommonsFunction>().AddAsync(function);
                     await _context.SaveChangesAsync();
@@ -141,6 +142,11 @@ namespace EstanciasCore.Controllers
             {
                 try
                 {
+                    var commonsRoutes = JsonConvert.DeserializeObject<List<CommonsRoute>>(routesJson);
+                    if (commonsRoutes != null && commonsRoutes.Any(r => !string.IsNullOrEmpty(r?.Url)))
+                    {
+                        return commonsRoutes.Select(r => r.Url).Where(u => !string.IsNullOrEmpty(u)).ToList();
+                    }
                     return JsonConvert.DeserializeObject<List<string>>(routesJson);
                 }
                 catch
@@ -186,7 +192,8 @@ namespace EstanciasCore.Controllers
                     existingFunction.Display = function.Display;
                     existingFunction.Show = function.Show;
                     existingFunction.LastEditTime = DateTime.Now;
-                    existingFunction.RoutesJson = JsonConvert.SerializeObject(selectedRoutes ?? new List<string>());
+                    var routeObjs = (selectedRoutes ?? new List<string>()).Select(r => new CommonsRoute(r)).ToList();
+                    existingFunction.RoutesJson = JsonConvert.SerializeObject(routeObjs);
 
                     _context.Set<CommonsFunction>().Update(existingFunction);
                     await _context.SaveChangesAsync();

@@ -1,4 +1,4 @@
-﻿@{
+@{
     var applicationName = "Estancias";
 }
 
@@ -12,6 +12,10 @@
 
     <meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
 
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
     @await Component.InvokeAsync("RegisterCommonsOffline")
 
@@ -20,6 +24,7 @@
     <link rel="stylesheet" type="text/css" href="~/css/Estancias.css" />
     <link rel="stylesheet" type="text/css" href="~/css/bootstrap-colorpicker.css">
     <link rel="stylesheet" type="text/css" href="~/css/select2.min.css" />
+    <link rel="stylesheet" type="text/css" href="~/css/dashboard-modern.css" asp-append-version="true" />
 
     <!-- COLORPICKER JS -->
     <script src="~/js/bootstrap-colorpicker.js"></script>
@@ -27,32 +32,12 @@
     <script type="text/javascript" src="~/js/moment.js"></script>
     <!-- SWEET ALERT JS -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@10"></script>
-
+    <!-- PORTAL SITE JS -->
+    <script type="text/javascript" src="~/js/site.js" asp-append-version="true"></script>
 </head>
 
-
-
-
-@*BODY TAG OPTIONS:
-    =================
-    Apply one or more of the following classes to get the
-    desired effect
-    |---------------------------------------------------------|
-    | SKINS         | skin-blue                               |
-    |               | skin-black                              |
-    |               | skin-purple                             |
-    |               | skin-yellow                             |
-    |               | skin-red                                |
-    |               | skin-green                              |
-    |---------------------------------------------------------|
-    |LAYOUT OPTIONS | fixed                                   |
-    |               | layout-boxed                            |
-    |               | layout-top-nav                          |
-    |               | sidebar-collapse                        |
-    |               | sidebar-mini                            |
-    |---------------------------------------------------------|*@
-
-<body class="hold-transition skin-green sidebar-mini">
+<body class="hold-transition skin-green sidebar-mini modern-theme">
+    <div class="top-gradient-bar"></div>
     <div class="wrapper">
         <!-- Main Header -->
         @await Component.InvokeAsync("Header")
@@ -63,7 +48,6 @@
             <!-- Content Header (Page header) -->
             <section class="content-header">
                 @await Component.InvokeAsync("PageHeader")
-                @await Component.InvokeAsync("Breadcrumb")
             </section>
             <!-- Main content -->
             <section class="content container-fluid">

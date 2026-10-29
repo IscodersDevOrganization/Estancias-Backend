@@ -1,70 +1,338 @@
-@{
-    ViewData["Title"] = "Funciones de Seguridad";
-}
-
 @using Commons.Identity
 @model IEnumerable<CommonsFunction>
+@{
+    ViewData["Title"] = "Funciones de Seguridad";
+    ViewData["BackArrow"] = "/Home/Index";
+}
 
 @functions {
-    public List<string> GetRoutes(string routesJson)
+    public static List<string> ParseRouteList(string routesJson)
     {
-        if (string.IsNullOrEmpty(routesJson)) return new List<string>();
+        var result = new List<string>();
+        if (string.IsNullOrEmpty(routesJson)) { return result; }
         routesJson = routesJson.Trim();
+
         if (routesJson.StartsWith("[") && routesJson.EndsWith("]"))
         {
             try
             {
-                return Newtonsoft.Json.JsonConvert.DeserializeObject<List<string>>(routesJson);
+                var token = Newtonsoft.Json.Linq.JToken.Parse(routesJson);
+                if (token is Newtonsoft.Json.Linq.JArray arr)
+                {
+                    foreach (var item in arr)
+                    {
+                        if (item.Type == Newtonsoft.Json.Linq.JTokenType.String)
+                        {
+                            var s = item.ToString().Trim();
+                            if (!string.IsNullOrEmpty(s)) { result.Add(s); }
+                        }
+                        else if (item is Newtonsoft.Json.Linq.JObject obj)
+                        {
+                            var url = obj["Url"]?.ToString() ?? obj["url"]?.ToString() ?? obj["Path"]?.ToString();
+                            if (!string.IsNullOrEmpty(url))
+                            {
+                                result.Add(url);
+                            }
+                            else
+                            {
+                                var area = obj["Area"]?.ToString();
+                                var ctrl = obj["Controller"]?.ToString();
+                                var act = obj["Action"]?.ToString();
+                                if (!string.IsNullOrEmpty(ctrl))
+                                {
+                                    var p = (!string.IsNullOrEmpty(area) ? $"/{area}" : "") + $"/{ctrl}/{act}";
+                                    result.Add(p);
+                                }
+                            }
+                        }
+                    }
+                    if (result.Any()) { return result.Distinct().ToList(); }
+                }
             }
-            catch
+            catch { }
+        }
+
+        var parts = routesJson.Split(new[] { ',', ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                              .Select(r => r.Trim())
+                              .Where(r => !string.IsNullOrEmpty(r) && !r.StartsWith("{") && !r.StartsWith("["))
+                              .Distinct()
+                              .ToList();
+        return parts;
+    }
+
+    public static (string Cat, string SubCat, string SubCat2, string CleanDesc, string BadgeClass) ParseCategoryHierarchy(string desc, string name)
+    {
+        var cat = "";
+        var subcat = "";
+        var subcat2 = "";
+        var cleanDesc = desc ?? "";
+
+        if (!string.IsNullOrEmpty(desc) && desc.StartsWith("[") && desc.Contains("]"))
+        {
+            var closingIdx = desc.IndexOf("]");
+            var bracketContent = desc.Substring(1, closingIdx - 1);
+            cleanDesc = desc.Substring(closingIdx + 1).Trim();
+
+            var parts = bracketContent.Split(new[] { '>', '/', '|' }, StringSplitOptions.RemoveEmptyEntries)
+                                      .Select(p => p.Trim())
+                                      .ToArray();
+            if (parts.Length > 0) { cat = parts[0]; }
+            if (parts.Length > 1) { subcat = parts[1]; }
+            if (parts.Length > 2) { subcat2 = parts[2]; }
+        }
+
+        // Categorización inteligente por defecto si no tiene etiquetas explícitas
+        if (string.IsNullOrEmpty(cat))
+        {
+            var text = ((name ?? "") + " " + (cleanDesc ?? "")).ToLower();
+            if (text.Contains("reporte") || text.Contains("informe") || text.Contains("estadistica") || text.Contains("resumen") || text.Contains("deuda"))
             {
-                // Fallback to splitting if JSON parsing fails
+                cat = "Reportes & Estadísticas";
+                subcat = "Informes";
+                subcat2 = "Consultas";
+            }
+            else if (text.Contains("usuario") || text.Contains("seguridad") || text.Contains("rol") || text.Contains("funcion") || text.Contains("perfil"))
+            {
+                cat = "Sistema & Seguridad";
+                subcat = "Control de Acceso";
+                subcat2 = "Permisos";
+            }
+            else if (text.Contains("sucursal") || text.Contains("proveedor") || text.Contains("marca") || text.Contains("documento") || text.Contains("moneda") || text.Contains("pais") || text.Contains("empresa") || text.Contains("billetera"))
+            {
+                cat = "Datos Maestros";
+                subcat = "Configuración";
+                subcat2 = "Entidades";
+            }
+            else
+            {
+                cat = "Gestión Operativa";
+                subcat = "Operaciones";
+                subcat2 = "General";
             }
         }
-        
-        return routesJson.Split(new[] { ',', ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                         .Select(r => r.Trim())
-                         .Where(r => !string.IsNullOrEmpty(r))
-                         .ToList();
+
+        var badgeClass = "badge-pill-blue";
+        if (cat.Contains("Datos")) { badgeClass = "badge-pill-purple"; }
+        else if (cat.Contains("Reporte")) { badgeClass = "badge-pill-green"; }
+        else if (cat.Contains("Sistema")) { badgeClass = "badge-pill-slate"; }
+
+        return (cat, subcat, subcat2, cleanDesc, badgeClass);
     }
 }
 
-<div class="box box-info">
-    <div class="box-header with-border filtro-grilla">
-        <span class="txt-titulo-box">Listado de Funciones de Seguridad</span>
-        <div class="input-group input-group-sm pull-right" style="max-width: 300px;">
-            <a onclick="nuevaFuncion()" class="btn btn-info btn-sm">
-                <i class="fa fa-plus"><span class="hidden-xs"> Nueva Función</span></i>
-            </a>
+<style>
+    .content-header {
+        display: none !important;
+    }
+
+    .func-route-code {
+        font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 11px;
+        color: #334155;
+        background: #f1f5f9;
+        border: 1px solid #e2e8f0;
+        padding: 1px 6px;
+        border-radius: 4px;
+        white-space: nowrap;
+        display: inline-block;
+    }
+
+    .func-routes-summary {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 4px;
+        max-width: 440px;
+    }
+
+    .btn-routes-toggle-more {
+        background: #f8fafc;
+        border: 1px solid #cbd5e1;
+        color: #2563eb;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 1px 7px;
+        border-radius: 4px;
+        cursor: pointer;
+        line-height: 1.5;
+        transition: all 0.15s ease;
+    }
+
+    .btn-routes-toggle-more:hover {
+        background: #eff6ff;
+        border-color: #93c5fd;
+    }
+
+    .func-routes-hidden-panel {
+        display: none;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 6px;
+        padding: 6px;
+        background: #f8fafc;
+        border-radius: 6px;
+        border: 1px solid #e2e8f0;
+        max-height: 150px;
+        overflow-y: auto;
+    }
+
+    .cat-hierarchy-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .cat-hierarchy-sub {
+        font-size: 11px;
+        color: #64748b;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .cat-hierarchy-sub i {
+        font-size: 9px;
+        color: #94a3b8;
+    }
+</style>
+
+<!-- Page Header (Title + Subtitle + Action Buttons) -->
+<div class="page-header-row">
+    <div class="page-header-left">
+        <div class="page-header-title-wrap">
+            <h1 class="modern-page-title">Funciones de Seguridad</h1>
+            <span class="badge-total-registros" id="lblTotalFuncionesCount">@Model.Count() funciones registradas</span>
+        </div>
+        <p class="modern-page-subtitle">Definición de permisos técnicos y rutas habilitadas agrupadas por controlador y categoría.</p>
+    </div>
+    <div class="page-header-actions">
+        <button type="button" onclick="nuevaFuncion()" class="btn btn-primary btn-sm" title="Crear una nueva Función de Seguridad">
+            <i class="fa fa-plus"></i> Nueva Función
+        </button>
+    </div>
+</div>
+
+<!-- White Card Container -->
+<div class="modern-card has-custom-toolbar">
+    <!-- Card Toolbar (Search + Filters + PageLength + Refresh) -->
+    <div class="card-toolbar">
+        <div class="card-toolbar-left">
+            <div class="modern-search-wrapper">
+                <i class="fa fa-search modern-search-icon"></i>
+                <input type="text" id="searchFuncionesInput" class="form-control modern-search-input" placeholder="Buscar por función, categoría, controlador o ruta...">
+            </div>
+        </div>
+        <div class="card-toolbar-right">
+            <select id="filtroCategoriaFunc" class="form-control modern-select" style="width: 190px;">
+                <option value="">Todas las categorías</option>
+                <option value="Gestión Operativa">Gestión Operativa</option>
+                <option value="Datos Maestros">Datos Maestros</option>
+                <option value="Reportes & Estadísticas">Reportes & Estadísticas</option>
+                <option value="Sistema & Seguridad">Sistema & Seguridad</option>
+            </select>
+
+            <div class="modern-length-wrapper">
+                <span>Mostrar:</span>
+                <select id="customPageLengthFuncs" class="form-control modern-select-sm" style="width: 68px;">
+                    <option value="10" selected>10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+
+            <button type="button" id="btnClearFuncsFilters" class="btn-clear-filters" title="Limpiar todos los filtros">
+                <i class="fa fa-eraser"></i> <span class="hidden-xs">Limpiar filtros</span>
+            </button>
+
+            <button type="button" id="btnReloadFuncs" class="btn-icon-reload" title="Recargar tabla">
+                <i class="fa fa-refresh"></i>
+            </button>
         </div>
     </div>
-    <div class="box-body">
-        <table id="listadoFunciones" class="table table-hover table-bordered table-responsive borde_interno">
+
+    <!-- Table -->
+    <div class="table-responsive">
+        <table id="listadoFunciones" class="table table-hover table-bordered table-responsive borde_interno modern-table">
             <thead>
                 <tr>
-                    <th>Nombre de Función</th>
-                    <th>Descripción</th>
-                    <th>Rutas Habilitadas</th>
-                    <th>Acciones</th>
+                    <th>NOMBRE DE FUNCIÓN</th>
+                    <th>CLASIFICACIÓN (CATEGORÍAS)</th>
+                    <th>DESCRIPCIÓN</th>
+                    <th>RUTAS HABILITADAS</th>
+                    <th class="text-center">ACCIONES</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (var item in Model)
                 {
+                    var routes = ParseRouteList(item.RoutesJson);
+                    var catInfo = ParseCategoryHierarchy(item.Description, item.Name);
+                    var rowUniqueId = "routes_panel_" + (item.Id ?? Guid.NewGuid().ToString("N"));
+
                     <tr>
-                        <td>@item.Name</td>
-                        <td>@item.Description</td>
                         <td>
-                            @foreach (var route in GetRoutes(item.RoutesJson))
+                            <span style="font-weight: 600; color: #1e293b; font-size: 13.5px;">@item.Name</span>
+                        </td>
+                        <td data-search="@catInfo.Cat @catInfo.SubCat @catInfo.SubCat2">
+                            <div class="cat-hierarchy-wrap">
+                                <span class="badge-pill @catInfo.BadgeClass">@catInfo.Cat</span>
+                                @if (!string.IsNullOrEmpty(catInfo.SubCat) || !string.IsNullOrEmpty(catInfo.SubCat2))
+                                {
+                                    <div class="cat-hierarchy-sub">
+                                        @if (!string.IsNullOrEmpty(catInfo.SubCat))
+                                        {
+                                            <span>@catInfo.SubCat</span>
+                                        }
+                                        @if (!string.IsNullOrEmpty(catInfo.SubCat2))
+                                        {
+                                            <i class="fa fa-angle-right"></i>
+                                            <span>@catInfo.SubCat2</span>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </td>
+                        <td>
+                            <span style="color: #64748b; font-size: 12.5px;">@(string.IsNullOrEmpty(catInfo.CleanDesc) ? "-" : catInfo.CleanDesc)</span>
+                        </td>
+                        <td>
+                            @if (!routes.Any())
                             {
-                                <span class="label label-default" style="margin-right: 4px; display: inline-block; margin-bottom: 4px; font-size: 0.95em;">
-                                    @route
-                                </span>
+                                <span class="text-muted" style="font-size: 11.5px; font-style: italic;">Sin rutas asignadas</span>
+                            }
+                            else
+                            {
+                                <div class="func-routes-summary">
+                                    <span class="badge-pill badge-pill-slate" style="font-size: 11px; font-weight: 600;">
+                                        <i class="fa fa-link text-primary"></i> @routes.Count rutas
+                                    </span>
+
+                                    @foreach (var r in routes.Take(2))
+                                    {
+                                        <span class="func-route-code" title="@r">@r</span>
+                                    }
+
+                                    @if (routes.Count > 2)
+                                    {
+                                        <button type="button" class="btn-routes-toggle-more" onclick="toggleHiddenRoutes('@rowUniqueId', this)">
+                                            +@(routes.Count - 2) más <i class="fa fa-chevron-down" style="font-size: 9px;"></i>
+                                        </button>
+                                        <div id="@rowUniqueId" class="func-routes-hidden-panel">
+                                            @foreach (var r in routes.Skip(2))
+                                            {
+                                                <span class="func-route-code" title="@r">@r</span>
+                                            }
+                                        </div>
+                                    }
+                                </div>
                             }
                         </td>
                         <td class="text-center">
-                            <a onclick="editFuncion('@item.Id')" title="Editar Función" class="btn btn-info btn-xs"><i class="fa fa-pencil"></i></a>
-                            <a asp-action="Delete" asp-route-id="@item.Id" confirm-icon="Danger" confirm-no="Cancelar" confirm-yes="Borrar" confirm="¿Está seguro de borrar esta Función?" class="btn btn-danger btn-xs"><i class="fa fa-trash"></i></a>
+                            <div class="action-buttons-group">
+                                <a onclick="editFuncion('@item.Id')" title="Editar Función" class="btn btn-info btn-xs"><i class="fa fa-pencil"></i></a>
+                                <a asp-action="Delete" asp-route-id="@item.Id" confirm-icon="Danger" confirm-no="Cancelar" confirm-yes="Borrar" confirm="¿Está seguro de borrar esta Función?" title="Eliminar Función" class="btn btn-danger btn-xs"><i class="fa fa-trash"></i></a>
+                            </div>
                         </td>
                     </tr>
                 }
@@ -73,21 +341,85 @@
     </div>
 </div>
 
-<modal title="Nueva Función" callback-modal="true" function="nuevaFuncion" load-url="/SecurityFunctions/_Create" size="Medium"></modal>
-<modal title="Editar Función" callback-modal="true" function="editFuncion" load-url="/SecurityFunctions/_Update/" size="Medium"></modal>
+<modal title="Nueva Función" callback-modal="true" function="nuevaFuncion" load-url="/SecurityFunctions/_Create" size="Large"></modal>
+<modal title="Editar Función" callback-modal="true" function="editFuncion" load-url="/SecurityFunctions/_Update/" size="Large"></modal>
 
 <script>
     $(document).ready(function () {
-        $('#listadoFunciones').DataTable({
-            "columnDefs": [
-                { "width": "20%", "targets": 0 },
-                { "width": "30%", "targets": 1 },
-                { "width": "40%", "targets": 2 },
-                { "width": "10%", "class": "text-center", "searchable": false, "orderable": false, "targets": 3 }
+        var table = $('#listadoFunciones').DataTable({
+            dom: 'rtip',
+            pageLength: 10,
+            order: [[0, 'asc']],
+            columnDefs: [
+                { targets: 0, responsivePriority: 1 },
+                { targets: 1, responsivePriority: 2 },
+                { targets: 2, responsivePriority: 4 },
+                { targets: 3, responsivePriority: 3 },
+                { targets: 4, responsivePriority: 1, searchable: false, orderable: false, className: 'text-center' }
             ],
-            "language": {
-                'url': '@Url.Content("~/lib/arg.json")'
+            language: {
+                processing: "Procesando...",
+                search: "Buscar:",
+                lengthMenu: "Mostrar _MENU_ registros",
+                info: "Mostrando _START_ a _END_ de _TOTAL_ funciones",
+                infoEmpty: "Mostrando 0 a 0 de 0 funciones",
+                infoFiltered: "(filtrado de _MAX_ funciones)",
+                loadingRecords: "Cargando...",
+                zeroRecords: "No se encontraron funciones coincidentes",
+                emptyTable: "No hay funciones registradas en el sistema",
+                paginate: {
+                    first: "Primero",
+                    previous: "Anterior",
+                    next: "Siguiente",
+                    last: "Último"
+                }
             }
         });
+
+        // Live Search Input
+        $('#searchFuncionesInput').on('keyup input', function () {
+            table.search(this.value).draw();
+        });
+
+        // Category Filter (Column 1 is CLASIFICACIÓN)
+        $('#filtroCategoriaFunc').on('change', function () {
+            var val = $(this).val();
+            table.column(1).search(val ? val : '').draw();
+        });
+
+        // Page Length
+        $('#customPageLengthFuncs').on('change', function () {
+            table.page.len(parseInt($(this).val(), 10)).draw();
+        });
+
+        // Refresh Button
+        $('#btnReloadFuncs').on('click', function () {
+            location.reload();
+        });
+
+        // Clear Filters Button
+        $('#btnClearFuncsFilters').on('click', function () {
+            $('#searchFuncionesInput').val('');
+            $('#filtroCategoriaFunc').val('');
+            $('#customPageLengthFuncs').val('10');
+
+            if (window.PortalFilterManager && window.PortalFilterManager.clearCurrentPage) {
+                window.PortalFilterManager.clearCurrentPage();
+            }
+
+            table.search('').columns().search('').page.len(10).draw();
+        });
     });
+
+    function toggleHiddenRoutes(panelId, btnElem) {
+        var $panel = $('#' + panelId);
+        var $btn = $(btnElem);
+        if ($panel.is(':visible')) {
+            $panel.slideUp(150);
+            $btn.find('i').removeClass('fa-chevron-up').addClass('fa-chevron-down');
+        } else {
+            $panel.css('display', 'flex').hide().slideDown(150);
+            $btn.find('i').removeClass('fa-chevron-down').addClass('fa-chevron-up');
+        }
+    }
 </script>

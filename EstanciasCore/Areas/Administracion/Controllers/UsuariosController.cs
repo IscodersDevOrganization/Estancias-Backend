@@ -44,7 +44,7 @@ namespace EstanciasCore.Controllers
             return View();
         }
 
-        public IActionResult UsuariosDataTable(string filtroIncobrable, string filtroTipoUsuario)
+        public IActionResult UsuariosDataTable(string filtroIncobrable, string filtroTipoUsuario, string filtroRoles = null)
         {
             var baseQuery = _context.Users.Where(x => x.UserName != "admin@admin.com");
 
@@ -66,6 +66,25 @@ namespace EstanciasCore.Controllers
                 }
             }
 
+            if (!string.IsNullOrEmpty(filtroRoles))
+            {
+                if (filtroRoles == "__con_roles__")
+                {
+                    var userIdsWithRoles = _context.UserRoles.Select(ur => ur.UserId).Distinct().ToList();
+                    baseQuery = baseQuery.Where(x => userIdsWithRoles.Contains(x.Id));
+                }
+                else if (filtroRoles == "__sin_roles__")
+                {
+                    var userIdsWithRoles = _context.UserRoles.Select(ur => ur.UserId).Distinct().ToList();
+                    baseQuery = baseQuery.Where(x => !userIdsWithRoles.Contains(x.Id));
+                }
+                else
+                {
+                    var userIdsForRole = _context.UserRoles.Where(ur => ur.RoleId == filtroRoles).Select(ur => ur.UserId).Distinct().ToList();
+                    baseQuery = baseQuery.Where(x => userIdsForRole.Contains(x.Id));
+                }
+            }
+
             var query = from usu in baseQuery
                 select new UserDTViewModel
                 {
@@ -78,6 +97,7 @@ namespace EstanciasCore.Controllers
                     AdministradorTexto = usu.Administradores==true ? "SI" : "NO",
                     NroDocumento =(usu.Personas!=null) ? usu.Personas.NroDocumento : " ",
                     Categoria = usu.UsuariosCategorias != null ? usu.UsuariosCategorias.Nombre : "Sin Categoría",
+                    CodigoColor = usu.UsuariosCategorias != null ? usu.UsuariosCategorias.CodigoColor : null,
                     Incobrable = usu.Incobrable,
                     IncobrableText = usu.Incobrable==true?"-": "<small class=\"label pull-right bg-red\">Si</small>",
                     TipoUsuario = usu.UsuarioSucursal ? "Sucursal" : "Común"
@@ -675,17 +695,28 @@ namespace EstanciasCore.Controllers
                         _context.Update(user);
                         await _context.SaveChangesAsync();
                     }
+                    if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                    {
+                        return Json(new { success = true, message = "Se actualizó el usuario correctamente." });
+                    }
                     return RedirectToAction("Index");
                 }
                 else
                 {
+                    if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                    {
+                        return Json(new { success = false, message = "Datos del formulario inválidos." });
+                    }
                     usuario=CargarViewBag(usuario);
                     return PartialView(usuario);
                 }
             }
             catch (Exception e)
             {
-
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return Json(new { success = false, message = "Error al actualizar el usuario: " + e.Message });
+                }
                 return RedirectToAction("Index");
             }
 
@@ -786,11 +817,19 @@ namespace EstanciasCore.Controllers
                     _context.Usuarios.Update(usuario);
                     _context.SaveChanges();
 
+                    if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                    {
+                        return Json(new { success = true, message = "Se ha cambiado la contraseña del usuario exitosamente." });
+                    }
                     AddPageAlerts(PageAlertType.Success, "Se ha cambiado la contraseña del usuario exitosamente.");
                     return RedirectToAction(nameof(Index));
                 }
                 else
                 {
+                    if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                    {
+                        return Json(new { success = false, message = "Las contraseñas no coinciden." });
+                    }
                     AddPageAlerts(PageAlertType.Error, "Hubo un error al cambiar la contraseña del usuario.");
                     return RedirectToAction(nameof(Index));
                 }
@@ -799,6 +838,10 @@ namespace EstanciasCore.Controllers
             }
             catch (Exception e)
             {
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return Json(new { success = false, message = "Ha ocurrido un error al cambiar la contraseña: " + e.Message });
+                }
                 AddPageAlerts(PageAlertType.Error, "Ha ocurrido un error al actualizar el usuario, intentelo nuevamente mas tarde.");
                 return RedirectToAction(nameof(Index));
             }
@@ -853,15 +896,27 @@ namespace EstanciasCore.Controllers
 
                     _context.Usuarios.Update(usuario);
                     await _context.SaveChangesAsync();
+                    if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                    {
+                        return Json(new { success = true, message = "Se actualizó la categoría del usuario " + usuario.UserName + " correctamente." });
+                    }
                     AddPageAlerts(PageAlertType.Success, "Se actualizó la categoría del usuario " + usuario.UserName + " correctamente.");
                 }
                 else
                 {
+                    if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                    {
+                        return Json(new { success = false, message = "No se encontró el usuario." });
+                    }
                     AddPageAlerts(PageAlertType.Error, "No se encontró el usuario.");
                 }
             }
             catch (Exception ex)
             {
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return Json(new { success = false, message = "Hubo un error al cambiar la categoría de usuario: " + ex.Message });
+                }
                 AddPageAlerts(PageAlertType.Error, "Hubo un error al cambiar la categoría de usuario.");
             }
 

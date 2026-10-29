@@ -1,36 +1,845 @@
-@using Commons.HtmlHelpers
+@using Commons.Identity
+@using Microsoft.AspNetCore.Mvc.Infrastructure
+@inject DAL.Data.EstanciasContext _context
+@inject IActionDescriptorCollectionProvider _actionDescriptorProvider
 @model Commons.Identity.CommonsRole
 @{
-    ViewData["Title"] = "Crear Rol";
-}
-<form asp-action="_Create" asp-controller="SecurityRoles">
+    ViewData["Title"] = "Crear Rol y Funciones";
+    var functions = ViewBag.Functions as List<CommonsFunction> 
+                    ?? _context.Set<CommonsFunction>().Where(f => f.DeletedDate == null).OrderBy(f => f.Name).ToList();
 
-    @using (Html.BoxBody())
+    var rawRouteGroups = ViewBag.RouteGroups as List<EstanciasCore.Controllers.SecurityRolesController.RouteGroup>;
+    var routeGroups = new List<dynamic>();
+
+    if (rawRouteGroups != null && rawRouteGroups.Any())
     {
+        foreach (var g in rawRouteGroups)
+        {
+            routeGroups.Add(new {
+                ControllerName = string.IsNullOrEmpty(g?.ControllerName) ? "Otros" : g.ControllerName,
+                AreaName = g?.AreaName ?? "",
+                Routes = g?.Routes ?? new List<string>()
+            });
+        }
+    }
+    else if (_actionDescriptorProvider != null)
+    {
+        var groupsDict = new Dictionary<string, dynamic>();
+        foreach (var ad in _actionDescriptorProvider.ActionDescriptors.Items)
+        {
+            var controller = ad.RouteValues["controller"];
+            var action = ad.RouteValues["action"];
+            var area = ad.RouteValues.ContainsKey("area") ? ad.RouteValues["area"] : null;
+
+            var path = "";
+            if (ad.AttributeRouteInfo != null && !string.IsNullOrEmpty(ad.AttributeRouteInfo.Template))
+            {
+                path = ad.AttributeRouteInfo.Template;
+                if (!path.StartsWith("/")) { path = "/" + path; }
+            }
+            else
+            {
+                path = (!string.IsNullOrEmpty(area) ? $"/{area}" : "") + $"/{controller}/{action}";
+            }
+
+            var key = $"{area}_{controller}";
+            if (!groupsDict.ContainsKey(key))
+            {
+                groupsDict[key] = new {
+                    ControllerName = controller,
+                    AreaName = area ?? "",
+                    Routes = new List<string>()
+                };
+            }
+            ((List<string>)groupsDict[key].Routes).Add(path);
+        }
+
+        foreach (var g in groupsDict.Values)
+        {
+            var rList = ((List<string>)g.Routes).Distinct().OrderBy(r => r).ToList();
+            routeGroups.Add(new {
+                ControllerName = (string)g.ControllerName,
+                AreaName = (string)g.AreaName,
+                Routes = rList
+            });
+        }
+    }
+
+    routeGroups = routeGroups
+        .OrderBy(g => (string)g.AreaName)
+        .ThenBy(g => (string)g.ControllerName)
+        .ToList();
+}
+
+<style>
+    .role-form-modal-wrap {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        color: #1e293b;
+        padding: 4px;
+    }
+
+    .role-form-modal-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .role-form-header-left {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+
+    .role-form-badge {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: #eff6ff;
+        border: 1px solid #dbeafe;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #2563eb;
+        font-size: 20px;
+        flex-shrink: 0;
+    }
+
+    .role-form-titles h3 {
+        font-size: 18px;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0;
+        line-height: 1.25;
+    }
+
+    .role-form-titles p {
+        font-size: 12.5px;
+        color: #64748b;
+        margin: 2px 0 0 0;
+    }
+
+    .role-form-close-btn {
+        background: transparent;
+        border: none;
+        font-size: 24px;
+        line-height: 1;
+        color: #94a3b8;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 6px;
+        transition: all 0.15s ease;
+    }
+
+    .role-form-close-btn:hover {
+        color: #0f172a;
+        background: #f1f5f9;
+    }
+
+    /* Category Module Selector Tiles */
+    .role-cat-selection-card {
+        background: #f8fafc;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin-bottom: 16px;
+    }
+
+    .role-cat-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+    }
+
+    .role-cat-title {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        color: #334155;
+        text-transform: uppercase;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .role-cat-tiles-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+    }
+
+    @@media (max-width: 768px) {
+        .role-cat-tiles-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    .role-cat-tile {
+        background: #ffffff;
+        border: 1.5px solid #cbd5e1;
+        border-radius: 8px;
+        padding: 10px 12px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        text-align: center;
+        user-select: none;
+    }
+
+    .role-cat-tile:hover {
+        border-color: #3b82f6;
+        background: #f0fdf4;
+    }
+
+    .role-cat-tile.active {
+        border-color: #2563eb !important;
+        background: #eff6ff !important;
+        box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+    }
+
+    .role-cat-tile-icon {
+        font-size: 18px;
+        margin-bottom: 4px;
+        display: block;
+    }
+
+    .role-cat-tile-name {
+        font-size: 12.5px;
+        font-weight: 700;
+        color: #0f172a;
+        display: block;
+    }
+
+    .role-cat-tile-desc {
+        font-size: 10.5px;
+        color: #64748b;
+        margin-top: 2px;
+        display: block;
+        line-height: 1.2;
+    }
+
+    .role-cat-preview-banner {
+        margin-top: 10px;
+        font-size: 11.5px;
+        color: #1e3a8a;
+        background: #eff6ff;
+        border: 1px dashed #bfdbfe;
+        border-radius: 6px;
+        padding: 6px 12px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    /* Fast Controller Selector Card (Unification) */
+    .role-ctrl-quick-card {
+        background: #f0fdf4;
+        border: 1.5px solid #bbf7d0;
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin-bottom: 18px;
+    }
+
+    .role-ctrl-quick-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+    }
+
+    .role-ctrl-quick-title {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        color: #166534;
+        text-transform: uppercase;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    /* 2 Column Layout for form fields */
+    .role-fields-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 14px;
+    }
+
+    @@media (max-width: 768px) {
+        .role-fields-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .role-form-field {
+        margin-bottom: 14px;
+    }
+
+    .role-form-field label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        color: #334155;
+        margin-bottom: 6px;
+    }
+
+    .role-form-field input,
+    .role-form-field textarea,
+    .role-form-field select {
+        border-radius: 8px !important;
+        border: 1px solid #cbd5e1 !important;
+        padding: 8px 12px !important;
+        font-size: 12.5px !important;
+        box-shadow: none !important;
+        color: #1e293b !important;
+        background: #ffffff !important;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .role-form-field input:focus,
+    .role-form-field textarea:focus,
+    .role-form-field select:focus {
+        border-color: #3c8dbc !important;
+        box-shadow: 0 0 0 3px rgba(60, 141, 188, 0.15) !important;
+        outline: none !important;
+    }
+
+    /* Collapsible Extra Functions Section */
+    .role-extra-funcs-accordion {
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        margin-bottom: 16px;
+        overflow: hidden;
+    }
+
+    .role-extra-funcs-header {
+        background: #f8fafc;
+        padding: 10px 14px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        user-select: none;
+    }
+
+    .role-extra-funcs-header:hover {
+        background: #f1f5f9;
+    }
+
+    .role-extra-funcs-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: #334155;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .role-extra-funcs-body {
+        padding: 12px 14px;
+        background: #ffffff;
+        border-top: 1px solid #e2e8f0;
+        display: none;
+    }
+
+    .assign-func-list-container {
+        max-height: 220px;
+        overflow-y: auto;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        padding: 6px;
+        background: #ffffff;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .assign-func-item-row {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        padding: 6px 10px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+
+    .assign-func-item-row:hover {
+        border-color: #93c5fd;
+        background: #f8fafc;
+    }
+
+    .assign-func-item-row.is-selected {
+        background: #eff6ff !important;
+        border-color: #93c5fd !important;
+    }
+
+    .assign-func-name {
+        font-size: 12px;
+        font-weight: 600;
+        color: #1e293b;
+    }
+
+    .assign-func-desc {
+        font-size: 11px;
+        color: #64748b;
+    }
+
+    /* Footer */
+    .role-form-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding-top: 16px;
+        border-top: 1px solid #f1f5f9;
+        margin-top: 10px;
+    }
+
+    .role-form-footer-left {
+        font-size: 12px;
+        color: #64748b;
+    }
+
+    .role-form-footer-left strong {
+        color: #0f172a;
+        font-weight: 700;
+    }
+
+    .role-form-footer-right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .role-form-footer .btn {
+        border-radius: 3px !important;
+        font-weight: 500 !important;
+        font-size: 12px !important;
+        line-height: 1.5 !important;
+        padding: 6px 18px !important;
+    }
+</style>
+
+<div class="role-form-modal-wrap" id="createRoleRoot">
+    <form action="/SecurityRoles/_Create" method="post" id="formCreateRole" onsubmit="return prepareRoleSubmit();">
         <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-        
-        <div class="form-group">
-            <label asp-for="ShowName" class="control-label">Nombre a Mostrar</label>
-            <input asp-for="ShowName" class="form-control" required />
-            <span asp-validation-for="ShowName" class="text-danger"></span>
+
+        <!-- Hidden input for selected category -->
+        <input type="hidden" name="category" id="roleCategoryHidden" value="Gestión" />
+        <input type="hidden" name="selectedController" id="selectedControllerHidden" value="" />
+
+        <!-- Container for auto-populated routes from selected controller -->
+        <div id="hiddenRoutesContainer"></div>
+
+        <!-- Header -->
+        <div class="role-form-modal-header">
+            <div class="role-form-header-left">
+                <div class="role-form-badge">
+                    <i class="fa fa-shield"></i>
+                </div>
+                <div class="role-form-titles">
+                    <h3>Nuevo Rol de Seguridad</h3>
+                    <p>Cree el rol, elija su módulo de pertenencia y vincule un controlador para crear automáticamente sus funciones.</p>
+                </div>
+            </div>
+            <button type="button" class="role-form-close-btn" data-dismiss="modal" title="Cerrar">&times;</button>
         </div>
 
-        <div class="form-group">
-            <label asp-for="Name" class="control-label">Nombre de Sistema (sin espacios)</label>
-            <input asp-for="Name" class="form-control" required pattern="^[a-zA-Z0-9_]+$" title="Solo letras, números y guión bajo." />
-            <span asp-validation-for="Name" class="text-danger"></span>
+        <!-- 1. MÓDULO / GRUPO DE PERTENENCIA (Para Asignación a Usuarios) -->
+        <div class="role-cat-selection-card">
+            <div class="role-cat-header">
+                <span class="role-cat-title">
+                    <i class="fa fa-th-large text-primary"></i> 1. MÓDULO O GRUPO DE PERTENENCIA:
+                </span>
+                <span class="badge-pill badge-pill-blue" id="lblCategoryCurrentBadge">Módulo Gestión</span>
+            </div>
+            <div class="role-cat-tiles-grid">
+                <div class="role-cat-tile active" data-category="Gestión" onclick="selectRoleCategory('Gestión')">
+                    <span class="role-cat-tile-icon">📁</span>
+                    <span class="role-cat-tile-name">Gestión</span>
+                    <span class="role-cat-tile-desc">Marketing, cupones, promociones, catálogo, ventas</span>
+                </div>
+                <div class="role-cat-tile" data-category="Datos" onclick="selectRoleCategory('Datos')">
+                    <span class="role-cat-tile-icon">🗄️</span>
+                    <span class="role-cat-tile-name">Datos</span>
+                    <span class="role-cat-tile-desc">Sucursales, empresas, monedas, documentos, billetera</span>
+                </div>
+                <div class="role-cat-tile" data-category="Reportes" onclick="selectRoleCategory('Reportes')">
+                    <span class="role-cat-tile-icon">📊</span>
+                    <span class="role-cat-tile-name">Reportes</span>
+                    <span class="role-cat-tile-desc">Estadísticas, informes analíticos, balances</span>
+                </div>
+                <div class="role-cat-tile" data-category="Sistema" onclick="selectRoleCategory('Sistema')">
+                    <span class="role-cat-tile-icon">⚙️</span>
+                    <span class="role-cat-tile-name">Sistema</span>
+                    <span class="role-cat-tile-desc">Usuarios, roles, funciones, comprobantes</span>
+                </div>
+            </div>
+
+            <!-- Subcategoría Selector / Sugerencias -->
+            <div class="role-subcat-input-row" style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed #cbd5e1;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                    <label for="roleSubcatInput" style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #334155; letter-spacing: 0.5px; margin: 0; display: inline-flex; align-items: center; gap: 5px;">
+                        <i class="fa fa-folder-open-o text-primary"></i> Subcategoría de Agrupación (Opcional - ej: Cupones):
+                    </label>
+                    <span class="text-muted" style="font-size: 11px;">Permite agrupar este rol en la ventana de asignación</span>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <input type="text" id="roleSubcatInput" class="form-control" placeholder="Ej: Cupones, Notificaciones, Pagos Tarjeta..." style="height: 35px; font-size: 12.5px; border-radius: 6px;" oninput="updateSubcatPreview()" />
+                </div>
+                <div id="subcatChipsContainer" style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; align-items: center;">
+                    <span style="font-size: 11px; color: #64748b; font-weight: 500;">Sugerencias:</span>
+                </div>
+            </div>
+
+            <div class="role-cat-preview-banner">
+                <i class="fa fa-info-circle text-primary"></i>
+                <span>En la ventana de <strong>Asignar Permisos a Usuarios</strong>, este rol se ubicará en: <strong id="lblSelectedCategoryPreview">Gestión</strong> <span id="lblSelectedSubcatPreviewWrap" style="display:none;">&gt; <strong id="lblSelectedSubcatPreview"></strong></span>.</span>
+            </div>
         </div>
 
-        <div class="form-group">
-            <label asp-for="Description" class="control-label">Descripción</label>
-            <textarea asp-for="Description" class="form-control" rows="3"></textarea>
+        <!-- 2. CONTROLADOR COMPLETO (UNIFICACIÓN CON FUNCIONES) -->
+        <div class="role-ctrl-quick-card">
+            <div class="role-ctrl-quick-header">
+                <span class="role-ctrl-quick-title">
+                    <i class="fa fa-bolt text-success"></i> 2. CONTROLADOR A ASOCIAR (CREARÁ AUTOMÁTICAMENTE LA FUNCIÓN Y RUTAS):
+                </span>
+                <span id="ctrlSelectedCountBadge" class="badge-pill badge-pill-green" style="display: none;"></span>
+            </div>
+            <select id="quickRoleControllerPicker" class="form-control" onchange="onQuickRoleControllerChanged(this)">
+                <option value="">-- Seleccione un Controlador para autogenerar función y rutas --</option>
+                @foreach (var g in routeGroups)
+                {
+                    var ctrl = (string)g.ControllerName ?? "Otros";
+                    var area = (string)g.AreaName ?? "";
+                    var areaPrefix = !string.IsNullOrEmpty(area) ? $"[{area}] " : "";
+                    var count = ((List<string>)g.Routes).Count;
+                    var routesJson = Newtonsoft.Json.JsonConvert.SerializeObject(g.Routes);
+                    <option value="@ctrl" data-controller="@ctrl" data-area="@area" data-count="@count" data-routes='@routesJson'>
+                        @areaPrefix@ctrl (@count rutas disponibles)
+                    </option>
+                }
+            </select>
+        </div>
+
+        <!-- 3. DATOS DEL ROL -->
+        <div class="role-fields-grid">
+            <div class="role-form-field">
+                <label asp-for="ShowName">Nombre a Mostrar (Etiqueta visible)</label>
+                <input asp-for="ShowName" id="roleShowNameInput" class="form-control" required placeholder="Ej: Clientes o Sucursales" />
+                <span asp-validation-for="ShowName" class="text-danger"></span>
+            </div>
+
+            <div class="role-form-field">
+                <label asp-for="Name">Nombre de Sistema (Identificador de acceso al menú)</label>
+                <input asp-for="Name" id="roleNameInput" class="form-control" required placeholder="Ej: Default WorkSpace: Clientes" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+        </div>
+
+        <div class="role-form-field">
+            <label asp-for="Description">Descripción del Rol</label>
+            <textarea asp-for="Description" id="roleDescInput" class="form-control" rows="2" placeholder="Acceso y alcance de las operaciones permitidas por este rol..."></textarea>
             <span asp-validation-for="Description" class="text-danger"></span>
         </div>
-    }
-    @using (Html.BoxFooter())
-    {
-        <a class="btn btn-default" asp-action="Index">Cancelar</a>
-        <input type="submit" value="Guardar" class="btn btn-primary pull-right" />
+
+        <!-- 4. ACORDEÓN: VINCULAR FUNCIONES EXISTENTES ADICIONALES (OPCIONAL) -->
+        <div class="role-extra-funcs-accordion">
+            <div class="role-extra-funcs-header" onclick="toggleExtraFuncsAccordion()">
+                <span class="role-extra-funcs-title">
+                    <i class="fa fa-key text-primary"></i> Vincular funciones de seguridad existentes adicionales (Opcional)
+                </span>
+                <span id="lblExtraFuncsCount" class="badge-pill badge-pill-slate">0 adicionales <i class="fa fa-chevron-down" id="extraFuncsChevron"></i></span>
+            </div>
+            <div class="role-extra-funcs-body" id="extraFuncsAccordionBody">
+                <div style="margin-bottom: 8px;">
+                    <input type="text" id="filterExtraFuncsInput" class="form-control input-sm" placeholder="Buscar función existente..." oninput="filterExtraFuncs(this.value)">
+                </div>
+                <div class="assign-func-list-container" id="extraFunctionsContainer">
+                    @foreach (var func in functions)
+                    {
+                        <div class="assign-func-item-row" data-func-text="@func.Name.ToLower()" onclick="handleExtraFuncClick(this, event)">
+                            <input type="checkbox" name="selectedFunctionIds" value="@func.Id" class="assign-func-chk" onclick="event.stopPropagation(); onExtraFuncCheckboxToggled();" />
+                            <div>
+                                <div class="assign-func-name">@func.Name</div>
+                                @if (!string.IsNullOrEmpty(func.Description))
+                                {
+                                    <div class="assign-func-desc">@func.Description</div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="role-form-footer">
+            <div class="role-form-footer-left">
+                <span id="roleFooterStatusSummary">
+                    <strong id="lblRoutesFooterCount">0</strong> rutas automáticas &nbsp;|&nbsp; 
+                    <strong id="lblExtraFuncsFooterCount">0</strong> funciones adicionales
+                </span>
+            </div>
+            <div class="role-form-footer-right">
+                <button type="button" class="btn btn-default btn-sm" data-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary btn-sm">Guardar Rol y Funciones</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+    var lastSelectedCtrl = '';
+
+    var subcatPresets = {
+        'Gestión': ['Cupones', 'Notificaciones', 'Pagos Tarjeta', 'Clientes', 'Comercial & Marketing'],
+        'Datos': ['Generales', 'Billetera', 'Específicos'],
+        'Reportes': ['Tarjetas & Cobranzas', 'Clientes', 'Informes Generales'],
+        'Sistema': ['Control de Acceso', 'Usuarios', 'Configuración']
+    };
+
+    function renderSubcatChips(cat) {
+        var chips = subcatPresets[cat] || [];
+        var $cont = $('#subcatChipsContainer');
+        $cont.find('.subcat-chip').remove();
+        $.each(chips, function (i, name) {
+            var $chip = $('<button type="button" class="btn btn-default btn-xs subcat-chip" style="border-radius: 12px; font-size: 11px; padding: 2px 8px; border-color: #cbd5e1; background: #ffffff;">+ ' + name + '</button>');
+            $chip.on('click', function () {
+                $('#roleSubcatInput').val(name);
+                updateSubcatPreview();
+            });
+            $cont.append($chip);
+        });
     }
 
-</form>
+    function updateSubcatPreview() {
+        var subcat = ($('#roleSubcatInput').val() || '').trim();
+        if (subcat) {
+            $('#lblSelectedSubcatPreview').text(subcat);
+            $('#lblSelectedSubcatPreviewWrap').show();
+        } else {
+            $('#lblSelectedSubcatPreviewWrap').hide();
+        }
+    }
+
+    $(function () {
+        var $modal = $('#createRoleRoot').closest('.modal');
+        if ($modal.length > 0) {
+            $modal.find('.modal-header').hide();
+            $modal.find('.modal-footer').hide();
+            $modal.find('.modal-dialog').css({
+                'max-width': '780px',
+                'width': '92%',
+                'margin': '30px auto'
+            });
+            $modal.find('.modal-body').css({
+                'padding': '24px 28px',
+                'background': '#ffffff',
+                'border-radius': '14px'
+            });
+            $modal.find('.modal-content').css({
+                'border-radius': '14px',
+                'border': '1px solid #e2e8f0',
+                'box-shadow': '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+            });
+        }
+
+        renderSubcatChips('Gestión');
+    });
+
+    // 1. Manejo de Categoría / Módulo
+    function selectRoleCategory(catName) {
+        $('.role-cat-tile').removeClass('active');
+        $('.role-cat-tile[data-category="' + catName + '"]').addClass('active');
+
+        $('#roleCategoryHidden').val(catName);
+        $('#lblSelectedCategoryPreview').text(catName);
+        renderSubcatChips(catName);
+        updateSubcatPreview();
+
+        var badgeClass = 'badge-pill-blue';
+        if (catName === 'Datos') { badgeClass = 'badge-pill-purple'; }
+        else if (catName === 'Reportes') { badgeClass = 'badge-pill-green'; }
+        else if (catName === 'Sistema') { badgeClass = 'badge-pill-slate'; }
+
+        $('#lblCategoryCurrentBadge')
+            .removeClass('badge-pill-blue badge-pill-purple badge-pill-green badge-pill-slate')
+            .addClass(badgeClass)
+            .text('Módulo ' + catName);
+    }
+
+    // 2. Manejo de Selección de Controlador
+    function onQuickRoleControllerChanged(selectElem) {
+        var $sel = $(selectElem);
+        var ctrlName = $sel.val();
+
+        if (!ctrlName) {
+            $('#hiddenRoutesContainer').empty();
+            $('#selectedControllerHidden').val('');
+            $('#ctrlSelectedCountBadge').hide();
+            $('#lblRoutesFooterCount').text('0');
+            return;
+        }
+
+        var $opt = $sel.find('option:selected');
+        var areaName = $opt.data('area') || '';
+        var routes = [];
+        try {
+            routes = JSON.parse($opt.attr('data-routes') || '[]');
+        } catch (e) {
+            routes = [];
+        }
+
+        $('#selectedControllerHidden').val(ctrlName);
+
+        // Generar inputs hidden con todas las rutas
+        var $container = $('#hiddenRoutesContainer');
+        $container.empty();
+        $.each(routes, function (i, r) {
+            $container.append($('<input type="hidden" name="selectedRoutes" />').val(r));
+        });
+
+        // Autocompletar Nombre a Mostrar
+        var $showName = $('#roleShowNameInput');
+        if (!$showName.val() || $showName.val() === lastSelectedCtrl) {
+            $showName.val(ctrlName);
+        }
+
+        // Autocompletar Nombre de Sistema
+        var $sysName = $('#roleNameInput');
+        if (!$sysName.val() || $sysName.val() === ('Default WorkSpace: ' + lastSelectedCtrl)) {
+            $sysName.val('Default WorkSpace: ' + ctrlName);
+        }
+
+        // Autocompletar Descripción
+        var $desc = $('#roleDescInput');
+        if (!$desc.val() || $desc.val().indexOf('Acceso completo al controlador') !== -1) {
+            $desc.val('Acceso completo al módulo ' + ctrlName + (!areaName ? '' : ' [' + areaName + ']'));
+        }
+
+        // Deducir categoría sugerida
+        deduceCategoryFromController(ctrlName, areaName);
+
+        lastSelectedCtrl = ctrlName;
+        $('#lblRoutesFooterCount').text(routes.length);
+        $('#ctrlSelectedCountBadge').html('<i class="fa fa-check"></i> ' + routes.length + ' rutas habilitadas para función automática').show();
+    }
+
+    function deduceCategoryFromController(ctrl, area) {
+        var c = (ctrl || '').toLowerCase();
+        var a = (area || '').toLowerCase();
+
+        var suggested = 'Gestión';
+        var suggestedSubcat = '';
+
+        if (a === 'reportes' || c.indexOf('reporte') !== -1 || c.indexOf('resumen') !== -1 || c.indexOf('estadistica') !== -1) {
+            suggested = 'Reportes';
+            if (c.indexOf('tarjeta') !== -1 || c.indexOf('pago') !== -1) { suggestedSubcat = 'Tarjetas & Cobranzas'; }
+            else if (c.indexOf('cliente') !== -1) { suggestedSubcat = 'Clientes'; }
+            else { suggestedSubcat = 'Informes Generales'; }
+        } else if (a === 'administracion' || c.indexOf('usuario') !== -1 || c.indexOf('security') !== -1 || c.indexOf('rol') !== -1 || c.indexOf('funcion') !== -1 || c.indexOf('comprobante') !== -1) {
+            suggested = 'Sistema';
+            if (c.indexOf('usuario') !== -1) { suggestedSubcat = 'Usuarios'; }
+            else { suggestedSubcat = 'Control de Acceso'; }
+        } else if (c.indexOf('sucursal') !== -1 || c.indexOf('empresa') !== -1 || c.indexOf('proveedor') !== -1 || c.indexOf('marca') !== -1 || c.indexOf('moneda') !== -1 || c.indexOf('pais') !== -1 || c.indexOf('provincia') !== -1 || c.indexOf('localidad') !== -1 || c.indexOf('documento') !== -1 || c.indexOf('billetera') !== -1 || c.indexOf('concepto') !== -1) {
+            suggested = 'Datos';
+            if (c.indexOf('billetera') !== -1) { suggestedSubcat = 'Billetera'; }
+            else if (c.indexOf('rubro') !== -1) { suggestedSubcat = 'Específicos'; }
+            else { suggestedSubcat = 'Generales'; }
+        } else {
+            suggested = 'Gestión';
+            if (c.indexOf('cupon') !== -1 || c.indexOf('premio') !== -1 || c.indexOf('puntos') !== -1 || c.indexOf('relacion') !== -1) {
+                suggestedSubcat = 'Cupones';
+            } else if (c.indexOf('notificac') !== -1 || c.indexOf('distribucion') !== -1) {
+                suggestedSubcat = 'Notificaciones';
+            } else if (c.indexOf('tarjeta') !== -1) {
+                suggestedSubcat = 'Pagos Tarjeta';
+            } else if (c.indexOf('cliente') !== -1) {
+                suggestedSubcat = 'Clientes';
+            } else {
+                suggestedSubcat = 'Comercial & Marketing';
+            }
+        }
+
+        selectRoleCategory(suggested);
+        if (suggestedSubcat) {
+            $('#roleSubcatInput').val(suggestedSubcat);
+            updateSubcatPreview();
+        }
+    }
+
+    // 3. Manejo de Acordeón de Funciones Adicionales
+    function toggleExtraFuncsAccordion() {
+        var $body = $('#extraFuncsAccordionBody');
+        var $chev = $('#extraFuncsChevron');
+        if ($body.is(':visible')) {
+            $body.slideUp(150);
+            $chev.removeClass('fa-chevron-up').addClass('fa-chevron-down');
+        } else {
+            $body.slideDown(150);
+            $chev.removeClass('fa-chevron-down').addClass('fa-chevron-up');
+        }
+    }
+
+    function handleExtraFuncClick(rowElem, event) {
+        if ($(event.target).is('input[type="checkbox"]')) return;
+        var $chk = $(rowElem).find('input[type="checkbox"]');
+        var newState = !$chk.prop('checked');
+        $chk.prop('checked', newState);
+        $(rowElem).toggleClass('is-selected', newState);
+        onExtraFuncCheckboxToggled();
+    }
+
+    function onExtraFuncCheckboxToggled() {
+        var count = $('#extraFunctionsContainer input[type="checkbox"]:checked').length;
+        $('#lblExtraFuncsCount').html(count + ' adicionales <i class="fa ' + ($('#extraFuncsAccordionBody').is(':visible') ? 'fa-chevron-up' : 'fa-chevron-down') + '" id="extraFuncsChevron"></i>');
+        $('#lblExtraFuncsFooterCount').text(count);
+    }
+
+    function filterExtraFuncs(q) {
+        var query = (q || '').toLowerCase().trim();
+        $('#extraFunctionsContainer .assign-func-item-row').each(function () {
+            var txt = $(this).data('func-text') || '';
+            if (!query || txt.indexOf(query) !== -1) {
+                $(this).show();
+            } else {
+                $(this).hide();
+            }
+        });
+    }
+
+    function prepareRoleSubmit() {
+        var showName = ($('#roleShowNameInput').val() || '').trim();
+        if (!showName) {
+            alert('Por favor, ingrese un Nombre a Mostrar para el Rol.');
+            $('#roleShowNameInput').focus();
+            return false;
+        }
+
+        var sysName = ($('#roleNameInput').val() || '').trim();
+        if (!sysName) {
+            $('#roleNameInput').val('Default WorkSpace: ' + showName);
+        }
+
+        // Combinar categoría y subcategoría para guardado en backend
+        var cat = $('#roleCategoryHidden').val() || 'Gestión';
+        if (cat.indexOf(' > ') !== -1) {
+            cat = cat.split(' > ')[0].trim();
+        }
+        var subcat = ($('#roleSubcatInput').val() || '').trim();
+        if (subcat) {
+            $('#roleCategoryHidden').val(cat + ' > ' + subcat);
+        } else {
+            $('#roleCategoryHidden').val(cat);
+        }
+
+        return true;
+    }
+</script>

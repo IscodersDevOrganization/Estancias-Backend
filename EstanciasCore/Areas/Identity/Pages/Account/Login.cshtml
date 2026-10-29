@@ -1,42 +1,51 @@
-﻿@page
+@page
 @model LoginModel
 
 @{
     ViewData["Title"] = "Ingresar al Sistema";
 }
 
-
-<form asp-route-returnurl="@ViewData["ReturnUrl"]" method="post" role="form">
-    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-    <p class="login-box-msg">@ViewBag.Title</p>
-    <div class="form-group has-feedback">
-        <input asp-for="Input.Email" class="form-control" placeholder="Nombre de Usuario" />
-        <span class="glyphicon glyphicon-user form-control-feedback"></span>
-        <span asp-validation-for="Input.Email" class="text-danger"></span>
-    </div>
-    <div class="form-group has-feedback">
-        <input asp-for="Input.Password" class="form-control" placeholder="Contraseña" />
-        <span class="glyphicon glyphicon-lock form-control-feedback"></span>
-        <span asp-validation-for="Input.Password" class="text-danger"></span>
+<div class="login-card">
+    <div class="login-card-header">
+        <h2 class="card-title-estancias">ESTANCIAS</h2>
+        <p class="card-subtitle-login">Ingresar al Sistema</p>
     </div>
 
-    <div class="row">
-        <div class="col-xs-8">
-            <div class="icheck-material-grey">
-                <input data-val="true" data-val-required="The Remember me? field is required." id="RememberMe" name="RememberMe" type="checkbox" value="true" /><input name="RememberMe" type="hidden" value="false">
-                <label for="RememberMe">
-                    Recuerdame
-                </label>
+    <form asp-route-returnurl="@ViewData["ReturnUrl"]" method="post" role="form" class="login-form-content">
+        <div asp-validation-summary="ModelOnly" class="login-validation-summary"></div>
+
+        <div class="login-field-group">
+            <div class="login-input-wrapper">
+                <input asp-for="Input.Email" class="login-input" placeholder="Nombre de Usuario" autocomplete="username" />
+                <span class="login-input-icon"><i class="fa fa-user"></i></span>
             </div>
+            <span asp-validation-for="Input.Email" class="login-field-error"></span>
         </div>
-        <!-- /.col -->
-        <div class="col-xs-4">
-            <button type="submit" class="btn btn-primary btn-block btn-flat">Ingresar</button>
-        </div>
-        <!-- /.col -->
-    </div>
-    @*<a asp-page="./ForgotPassword">Recuperar Constraseña</a> <br />*@
-</form>
 
+        <div class="login-field-group">
+            <div class="login-input-wrapper">
+                <input asp-for="Input.Password" class="login-input" placeholder="Contraseña" autocomplete="current-password" />
+                <span class="login-input-icon"><i class="fa fa-lock"></i></span>
+            </div>
+            <span asp-validation-for="Input.Password" class="login-field-error"></span>
+        </div>
+
+        <div class="login-action-row">
+            <label class="login-checkbox-label">
+                <input asp-for="Input.RememberMe" type="checkbox" class="login-checkbox" />
+                <span class="login-checkbox-text">Recordarme</span>
+            </label>
+            <button type="submit" class="login-submit-btn">Ingresar</button>
+        </div>
+
+        <div class="login-forgot-row">
+            <a href="#" class="login-forgot-link">¿Olvidó su contraseña?</a>
+        </div>
+    </form>
+
+    <div class="login-card-footer">
+        <span>Tecnología provista por <a href="https://iscoders.com.ar/" target="_blank" rel="noopener"><strong>iscoders</strong></a></span>
+    </div>
+</div>
 
 <partial name="_ValidationScriptsPartial" />

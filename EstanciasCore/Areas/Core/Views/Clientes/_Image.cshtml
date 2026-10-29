@@ -1,4 +1,4 @@
-﻿@using Commons.HtmlHelpers
+@using Commons.HtmlHelpers
 @model DAL.Models.Clientes
 @{
     ViewData["Title"] = "Cargar Foto";
@@ -30,7 +30,7 @@
     }
     @using (Html.BoxFooter())
     {
-        <a class="btn btn-default" asp-action="Index">Cancelar</a>
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
         <input type="submit" value="Guardar" class="btn btn-primary pull-right" />
     }
 

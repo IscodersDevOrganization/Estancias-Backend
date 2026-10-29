@@ -1,113 +1,692 @@
+@inject DAL.Data.EstanciasContext _dbContext
 @{
     ViewData["Title"] = "Usuarios";
     ViewData["BackArrow"] = "/Home/Index";
+
+    var categoryColorsMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    try
+    {
+        var dbCats = _dbContext.UsuariosCategorias
+            .Where(c => !string.IsNullOrEmpty(c.Nombre))
+            .Select(c => new { c.Nombre, c.CodigoColor })
+            .ToList();
+
+        foreach (var item in dbCats)
+        {
+            if (!string.IsNullOrEmpty(item.Nombre) && !string.IsNullOrEmpty(item.CodigoColor))
+            {
+                categoryColorsMap[item.Nombre.Trim()] = item.CodigoColor.Trim();
+            }
+        }
+    }
+    catch { }
+
+    var userRolesMap = new Dictionary<string, List<string>>();
+    var allRolesList = new List<Commons.Identity.CommonsRole>();
+    try
+    {
+        allRolesList = _dbContext.Set<Commons.Identity.CommonsRole>()
+                                 .Where(r => r.Enabled)
+                                 .ToList()
+                                 .OrderBy(r => !string.IsNullOrEmpty(r.ShowName) ? r.ShowName : r.Name)
+                                 .ToList();
+
+        var allUserRoles = _dbContext.UserRoles.ToList();
+        var rolesDict = new Dictionary<string, string>();
+        foreach (var r in allRolesList)
+        {
+            if (!string.IsNullOrEmpty(r.Id) && !rolesDict.ContainsKey(r.Id))
+            {
+                rolesDict[r.Id] = !string.IsNullOrEmpty(r.ShowName) ? r.ShowName : (!string.IsNullOrEmpty(r.Name) ? r.Name : "Rol");
+            }
+        }
+
+        foreach (var ur in allUserRoles)
+        {
+            if (rolesDict.TryGetValue(ur.RoleId, out var roleName))
+            {
+                if (!userRolesMap.ContainsKey(ur.UserId))
+                {
+                    userRolesMap[ur.UserId] = new List<string>();
+                }
+                userRolesMap[ur.UserId].Add(roleName);
+            }
+        }
+    }
+    catch { }
 }
 
-<div class="box box-info">
-    <div class="box-header with-border filtro-grilla">
-        <div class="container-fluid">
-            <div class="row" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;">
-                <div class="col-md-2 label-form" style="margin-bottom: 5px;"><label for="estadoId" style="margin-bottom: 0;">Listado de Usuarios</label></div>
-                <div class="col-md-2" style="margin-bottom: 5px;">
-                    <select id="filtroIncobrable" class="form-control input-sm" onchange="$('#usersTable').DataTable().ajax.reload();">
-                        <option value="">Todos los cobros</option>
-                        <option value="1">Incobrables</option>
-                        <option value="0">Cobrables</option>
-                    </select>
-                </div>
-                <div class="col-md-2" style="margin-bottom: 5px;">
-                    <select id="filtroTipoUsuario" class="form-control input-sm" onchange="$('#usersTable').DataTable().ajax.reload();">
-                        <option value="">Todos los tipos</option>
-                        <option value="comun">Común</option>
-                        <option value="sucursal">Sucursal</option>
-                    </select>
-                </div>
-                <div class="col-md-6 text-right" style="margin-bottom: 5px;">
-                    <a onclick="NuevoUsuario()" title="Nuevo Usuario" class="btn btn-primary btn-sm"><i class="fa fa-user"></i>&nbsp Nuevo Usuario</a>
-                    &nbsp;
-                    <a onclick="NuevoUsuarioSucursal()" title="Nuevo Usuario Sucursal" class="btn btn-primary btn-sm"><i class="fa fa-building"></i>&nbsp Nuevo Usuario Sucursal</a>
-                    &nbsp;
-                    <a href="/Administracion/Usuarios/BorrarUsuario" title="Borrar Usuario" class="btn btn-danger btn-sm"><i class="fa fa-trash"></i>&nbsp Borrar Usuario</a>
-                </div>
+<style>
+    .content-header {
+        display: none !important;
+    }
+
+    .user-roles-pill-group {
+        display: inline-flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 4px;
+        max-width: 260px;
+    }
+
+    .user-roles-pill-group:hover .badge-pill-blue {
+        background: #dbeafe !important;
+        border-color: #93c5fd !important;
+    }
+</style>
+
+<!-- Page Header (Title + Subtitle + Action Buttons) -->
+<div class="page-header-row">
+    <div class="page-header-left">
+        <div class="page-header-title-wrap">
+            <h1 class="modern-page-title">Usuarios</h1>
+            <span class="badge-total-registros" id="lblTotalRegistros">Cargando...</span>
+            <span class="badge-total-registros" style="background: #eff6ff; color: #2563eb; border-color: #dbeafe;" title="Usuarios con roles de seguridad asignados">
+                <i class="fa fa-shield"></i> @userRolesMap.Keys.Count con roles
+            </span>
+        </div>
+        <p class="modern-page-subtitle">Gestión de cuentas de clientes, sucursales, estado de cobro y asignación de credenciales.</p>
+    </div>
+    <div class="page-header-actions">
+       @*  <button type="button" id="btnExportar" class="btn btn-default btn-sm" title="Exportar a CSV">
+            <i class="fa fa-upload"></i> Exportar
+        </button> *@
+        <a href="/Administracion/Usuarios/BorrarUsuario" class="btn btn-danger btn-sm" title="Borrar Usuario">
+            <i class="fa fa-trash"></i> Borrar Usuario
+        </a>
+        <button type="button" onclick="NuevoUsuarioSucursal()" class="btn btn-primary btn-sm" title="Nuevo Usuario Sucursal">
+            <i class="fa fa-building"></i> Nuevo Usuario Sucursal
+        </button>
+        <button type="button" onclick="NuevoUsuario()" class="btn btn-info btn-sm" title="Nuevo Usuario">
+            <i class="fa fa-plus"></i> Nuevo Usuario
+        </button>
+    </div>
+</div>
+
+<!-- White Card Container -->
+<div class="modern-card has-custom-toolbar">
+    <!-- Card Toolbar (Search + Filters + PageLength + Refresh) -->
+    <div class="card-toolbar">
+        <div class="card-toolbar-left">
+            <div class="modern-search-wrapper">
+                <i class="fa fa-search modern-search-icon"></i>
+                <input type="text" id="customSearchInput" class="form-control modern-search-input" placeholder="Buscar por documento, tarjeta, email o nombre...">
             </div>
         </div>
+        <div class="card-toolbar-right">
+            <!-- Filter: Roles dropdown -->
+            <select id="filtroRoles" class="form-control modern-select" style="width: 180px;" title="Filtrar por rol">
+                <option value="">Todos los roles</option>
+                <option value="__con_roles__">🛡️ Con roles (@userRolesMap.Keys.Count)</option>
+                <option value="__sin_roles__">⚪ Sin roles</option>
+                @if (allRolesList.Any())
+                {
+                    <optgroup label="Filtrar por rol específico:">
+                        @foreach (var r in allRolesList)
+                        {
+                            var rName = !string.IsNullOrEmpty(r.ShowName) ? r.ShowName : r.Name;
+                            <option value="@r.Id">@rName</option>
+                        }
+                    </optgroup>
+                }
+            </select>
+
+            <!-- Filter: Cobro -->
+            <select id="filtroIncobrable" class="form-control modern-select" style="width: 140px;">
+                <option value="">Cobros: Todos</option>
+                <option value="1">Incobrables</option>
+                <option value="0">Cobrables</option>
+            </select>
+
+            <!-- Filter: Tipo Usuario -->
+            <select id="filtroTipoUsuario" class="form-control modern-select" style="width: 135px;">
+                <option value="">Tipos: Todos</option>
+                <option value="comun">Común</option>
+                <option value="sucursal">Sucursal</option>
+            </select>
+
+            <div class="modern-length-wrapper">
+                <span>Mostrar:</span>
+                <select id="customPageLength" class="form-control modern-select-sm" style="width: 68px;">
+                    <option value="10" selected>10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+
+            <button type="button" id="btnClearFilters" class="btn-clear-filters" title="Limpiar todos los filtros">
+                <i class="fa fa-eraser"></i> <span class="hidden-xs">Limpiar filtros</span>
+            </button>
+
+            <button type="button" id="btnReloadTable" class="btn-icon-reload" title="Recargar tabla">
+                <i class="fa fa-refresh"></i>
+            </button>
+        </div>
     </div>
-    <div class="box-body">
-        <table class="table table-hover table-bordered table-responsive borde_interno" id="usersTable"></table>
+
+    <!-- Table -->
+    <div class="table-responsive">
+        <table class="table table-hover table-bordered table-responsive borde_interno modern-table" id="usersTable"></table>
     </div>
 </div>
 
 <modal title="Usuario" function="verUsuario" load-url="/Admin/Usuario/_DetalleUsuario" size="Large"></modal>
 <modal callback-modal="true" title="Creacion de Usuario" function="crearUsuarioNumeroDocumento" load-url="/Admin/Usuario/_BuscarPersonaPorDocumento" size="Medium"></modal>
-<modal title="Modificar roles" load-url="/SecurityRoles/_Assign" function="Roles"></modal>
+<modal callback-modal="true" title="Asignar Permisos y Roles Locales" load-url="/SecurityRoles/_Assign" function="Roles" size="Large"></modal>
 <modal callback-modal="true" title="Reportes" load-url="/Admin/Usuario/_ReportesUsuario" function="Reportes" size="Large"></modal>
-@* <modal callback-modal="true" title="Nuevo Usuario" load-url="/Administracion/Usuarios/Create" function="NuevoUsuario" size="Medium"></modal> *@
-
 <modal callback-modal="true" title="Nuevo Usuario" load-url="/Administracion/Usuarios/CreateUserEstancia" function="NuevoUsuario" size="Medium"></modal> 
 <modal callback-modal="true" title="Nuevo Usuario Sucursal" load-url="/Administracion/Usuarios/CreateUserSucursal" function="NuevoUsuarioSucursal" size="Medium"></modal>
-
 <modal title="Editar Usuario" callback-modal="true" function="editUser" load-url="/Administracion/Usuarios/Update/" size="Medium"></modal>
 <modal title="Modificar contraseña usuario" callback-modal="true" function="_ChangePassword" load-url="/Administracion/Usuarios/_ChangePassword/" size="Medium"></modal>
 <modal title="Cambiar categoría de usuario" callback-modal="true" function="changeCategory" load-url="/Administracion/Usuarios/ChangeCategory/" size="Medium"></modal>
 
 <script>
+    var categoryColorsMap = @Html.Raw(Newtonsoft.Json.JsonConvert.SerializeObject(categoryColorsMap));
+    var userRolesMap = @Html.Raw(Newtonsoft.Json.JsonConvert.SerializeObject(userRolesMap));
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        return String(text)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
     $(function () {
+        var normPath = (window.location.pathname || '').toLowerCase().replace(/\/index\/?$/, '').replace(/\/+$/, '') || '/';
+        var pathKey = 'portal_flt_' + normPath;
+
+        function getSavedFilter(suffix) {
+            var k = pathKey + '_' + suffix.toLowerCase();
+            var val = sessionStorage.getItem(k);
+            if (val === null || val === undefined) {
+                val = localStorage.getItem(k);
+            }
+            if (val !== null && val !== undefined) {
+                try { return JSON.parse(val); } catch (e) { return val; }
+            }
+            return null;
+        }
+
+        function setSavedFilter(suffix, val) {
+            var k = pathKey + '_' + suffix.toLowerCase();
+            if (val === null || val === undefined || val === '') {
+                sessionStorage.removeItem(k);
+                localStorage.removeItem(k);
+            } else {
+                var s = JSON.stringify(val);
+                sessionStorage.setItem(k, s);
+                localStorage.setItem(k, s);
+            }
+        }
+
+        // Restaurar filtros antes de inicializar la tabla
+        var savedRoles = getSavedFilter('filtroroles');
+        var savedIncobrable = getSavedFilter('filtroincobrable');
+        var savedTipo = getSavedFilter('filtrotipousuario');
+        var savedSearch = getSavedFilter('customsearchinput');
+        var savedLen = getSavedFilter('custompagelength');
+
+        if (savedRoles !== null && savedRoles !== '') $('#filtroRoles').val(savedRoles);
+        if (savedIncobrable !== null && savedIncobrable !== '') $('#filtroIncobrable').val(savedIncobrable);
+        if (savedTipo !== null && savedTipo !== '') $('#filtroTipoUsuario').val(savedTipo);
+        if (savedSearch !== null && savedSearch !== '') $('#customSearchInput').val(savedSearch);
+        if (savedLen !== null && savedLen !== '') $('#customPageLength').val(savedLen);
+
+        var parsedLen = parseInt($('#customPageLength').val(), 10) || 10;
+        var initialSearchTerm = $('#customSearchInput').val() || '';
+
         var usersTable = $('#usersTable').DataTable({
             serverSide: true,
             processing: true,
+            pageLength: parsedLen,
+            search: {
+                search: initialSearchTerm
+            },
             ajax: {
                 url: '@Url.Action("UsuariosDataTable")',
                 type: "POST",
                 data: function (d) {
                     d.filtroIncobrable = $('#filtroIncobrable').val();
                     d.filtroTipoUsuario = $('#filtroTipoUsuario').val();
+                    d.filtroRoles = $('#filtroRoles').val();
+                }
+            },
+            stateSaveParams: function (settings, data) {
+                data.filtroRoles = $('#filtroRoles').val();
+                data.filtroIncobrable = $('#filtroIncobrable').val();
+                data.filtroTipoUsuario = $('#filtroTipoUsuario').val();
+                data.customSearch = $('#customSearchInput').val();
+                data.customPageLength = $('#customPageLength').val();
+            },
+            stateLoadParams: function (settings, data) {
+                if (data) {
+                    if (data.filtroRoles !== undefined && data.filtroRoles !== null && data.filtroRoles !== '') {
+                        $('#filtroRoles').val(data.filtroRoles);
+                    }
+                    if (data.filtroIncobrable !== undefined && data.filtroIncobrable !== null && data.filtroIncobrable !== '') {
+                        $('#filtroIncobrable').val(data.filtroIncobrable);
+                    }
+                    if (data.filtroTipoUsuario !== undefined && data.filtroTipoUsuario !== null && data.filtroTipoUsuario !== '') {
+                        $('#filtroTipoUsuario').val(data.filtroTipoUsuario);
+                    }
+                    if (data.customSearch !== undefined && data.customSearch !== null && data.customSearch !== '') {
+                        $('#customSearchInput').val(data.customSearch);
+                    }
+                    if (data.customPageLength !== undefined && data.customPageLength !== null && data.customPageLength !== '') {
+                        $('#customPageLength').val(data.customPageLength);
+                    }
                 }
             },
             rowId: 'Id',
             columns: [
-                { data: "NroDocumento", title: "Nro Documento", responsivePriority: 1 },
-                { data: "NroTarjeta", title: "Nro de Tarjeta", responsivePriority: 1 },
-                { data: "Usuario", title: "Usuario", responsivePriority: 2 },
-                { data: "Nombre", title: "Nombre", responsivePriority: 3 },
-                { data: "Categoria", title: "Categoría", responsivePriority: 4 },
                 {
-                    title: "Incobrable",
+                    data: "NroDocumento",
+                    title: "NRO DOCUMENTO",
+                    responsivePriority: 1,
+                    render: function (data, type) {
+                        if (type !== 'display') return data;
+                        var str = String(data || '').trim();
+                        return (str !== '' && str !== '0' && str !== '-') ? str : '-';
+                    }
+                },
+                {
+                    data: "NroTarjeta",
+                    title: "NRO DE TARJETA",
+                    responsivePriority: 1,
+                    render: function (data, type) {
+                        if (type !== 'display') return data;
+                        var str = String(data || '').trim();
+                        if (str === '' || str === '0' || str === '-') {
+                            return '<span style="color:#94a3b8; font-size:12px;">Sin Tarjeta</span>';
+                        }
+                        return '<span class="badge-tarjeta-pill">' + str + '</span>';
+                    }
+                },
+                {
+                    data: "Usuario",
+                    title: "USUARIO",
+                    responsivePriority: 2,
+                    render: function (data, type) {
+                        if (type !== 'display') return data;
+                        var str = String(data || '').trim();
+                        return '<span class="text-usuario-email">' + (str !== '' ? str : '-') + '</span>';
+                    }
+                },
+                {
+                    data: "Nombre",
+                    title: "NOMBRE",
+                    responsivePriority: 2,
+                    render: function (data, type) {
+                        if (type !== 'display') return data;
+                        var str = String(data || '').trim();
+                        return (str !== '' && str !== '-') ? escapeHtml(str) : '-';
+                    }
+                },
+                {
+                    data: "Categoria",
+                    title: "CATEGORÍA",
+                    responsivePriority: 4,
+                    render: function (data, type, row) {
+                        if (type !== 'display') return data;
+                        var catName = String(data || '').trim();
+                        if (catName === '' || catName === 'Sin Categoría' || catName === 'Sin Categoria') {
+                            return '<span class="badge-pill badge-pill-slate">Sin Categoría</span>';
+                        }
+
+                        var color = (row && (row.CodigoColor || row.codigoColor)) ? String(row.CodigoColor || row.codigoColor).trim() : '';
+                        if (!color && typeof categoryColorsMap !== 'undefined' && categoryColorsMap) {
+                            color = categoryColorsMap[catName] || categoryColorsMap[catName.toLowerCase()] || '';
+                        }
+
+                        return renderCategoryPill(catName, color);
+                    }
+                },
+                {
+                    data: "TipoUsuario",
+                    title: "TIPO",
+                    responsivePriority: 5,
+                    render: function (data, type) {
+                        if (type !== 'display') return data;
+                        if (data === "Sucursal") {
+                            return '<span class="badge-pill badge-pill-blue"><i class="fa fa-building-o"></i> Sucursal</span>';
+                        }
+                        return '<span class="badge-pill badge-pill-green"><i class="fa fa-user-o"></i> Común</span>';
+                    }
+                },
+                {
+                    title: "INCOBRABLE",
                     data: "Incobrable",
                     sortable: false,
                     responsivePriority: 5,
                     className: 'text-center',
                     render: function (data, type, row) {
-                        var action = '';
+                        if (type !== 'display') return data ? 'Si' : 'No';
+                        var id = row.Id || row.id || '';
                         if (row['Incobrable']) {
-                            action += `<small class="label pull-center bg-red">Si</small>`;
+                            return '<span class="badge-pill badge-pill-red" onclick="toggleIncobrable(\'' + id + '\')" style="cursor:pointer;" title="Click para cambiar estado">Si</span>';
                         } else {
-                            action += `-`;
+                            return '<span class="text-muted" onclick="toggleIncobrable(\'' + id + '\')" style="cursor:pointer;" title="Click para marcar como Incobrable">-</span>';
                         }
-                        return action;
                     }
                 },
-                { data: "TipoUsuario", title: "Tipo", responsivePriority: 5 },
                 {
-                    title: "Actions",
+                    data: "Id",
+                    title: "ROLES",
+                    sortable: false,
+                    responsivePriority: 3,
+                    render: function (data, type, row) {
+                        if (type !== 'display') return data;
+                        var userId = row.Id || row.id || data || '';
+                        var roles = (typeof userRolesMap !== 'undefined' && userRolesMap && userRolesMap[userId]) ? userRolesMap[userId] : [];
+
+                        if (!roles || roles.length === 0) {
+                            return '<span class="text-muted" style="font-size: 11.5px; font-style: italic;">Sin roles</span>';
+                        }
+
+                        var html = '<div class="user-roles-pill-group" onclick="Roles(\'' + userId + '\')" style="cursor: pointer;" title="Click para administrar roles de este usuario">';
+                        if (roles.length === 1) {
+                            html += '<span class="badge-pill badge-pill-blue"><i class="fa fa-shield"></i> ' + escapeHtml(roles[0]) + '</span>';
+                        } else if (roles.length === 2) {
+                            html += '<span class="badge-pill badge-pill-blue"><i class="fa fa-shield"></i> ' + escapeHtml(roles[0]) + '</span> ';
+                            html += '<span class="badge-pill badge-pill-slate">' + escapeHtml(roles[1]) + '</span>';
+                        } else {
+                            var allTitles = roles.map(escapeHtml).join(', ');
+                            html += '<span class="badge-pill badge-pill-blue"><i class="fa fa-shield"></i> ' + escapeHtml(roles[0]) + '</span> ';
+                            html += '<span class="badge-pill badge-pill-slate" title="' + allTitles + '">+' + (roles.length - 1) + ' más</span>';
+                        }
+                        html += '</div>';
+                        return html;
+                    }
+                },
+                {
+                    title: "ACCIONES",
                     sortable: false,
                     responsivePriority: 1,
+                    className: 'text-center',
                     render: function (data, type, row) {
-                        var action = '';
-                        action += `<a onclick="Roles('${row['Id']}')" title="Asignar Roles" class="btn btn-primary btn-xs"><i class="fa fa-plus"></i></a> &nbsp`;
-                        action += `<a onclick="editUser('${row['Id']}')" title="Editar Usuario" class="btn btn-info btn-xs"><i class="fa fa-pencil"></i></a> &nbsp`;
-                        action += `<a onclick="_ChangePassword('${row['Id']}')" title="Modificar Contraseña Usuario" class="btn bg-green btn-xs"><i class="fa fa-lock"></i></a> &nbsp`;
-                        action += `<a onclick="changeCategory('${row['Id']}')" title="Cambiar Categoría" class="btn btn-warning btn-xs"><i class="fa fa-tags"></i></a> &nbsp`;                        
+                        var id = row.Id || row.id || '';
+                        var uRoles = (typeof userRolesMap !== 'undefined' && userRolesMap && userRolesMap[id]) ? userRolesMap[id] : [];
+                        var hasRoles = (uRoles && uRoles.length > 0);
+                        var roleBtnClass = hasRoles ? 'btn-primary' : 'btn-info';
+                        var roleBtnTitle = hasRoles ? ('Roles asignados: ' + uRoles.join(', ') + ' (Click para editar)') : 'Asignar Roles';
+
+                        var action = '<div class="action-buttons-group">';
+                        action += '<a onclick="editUser(\'' + id + '\')" title="Editar Usuario" class="btn btn-primary btn-xs"><i class="fa fa-edit"></i></a> ';
+                        action += '<a onclick="Roles(\'' + id + '\')" title="' + roleBtnTitle + '" class="btn ' + roleBtnClass + ' btn-xs"><i class="fa fa-shield"></i></a> ';
+                        action += '<a onclick="_ChangePassword(\'' + id + '\')" title="Modificar Contraseña" class="btn btn-success btn-xs"><i class="fa fa-lock"></i></a> ';
+                        action += '<a onclick="changeCategory(\'' + id + '\')" title="Cambiar Categoría" class="btn btn-warning btn-xs"><i class="fa fa-tags"></i></a> ';
+                        action += '</div>';
                         return action;
                     }
                 }
             ],
-            deferRender: true, // Enable deferred rendering
-            paging: true, // Enable paging
-            pageLength: 10, // Set initial page length
-            lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "All"]], // Set length menu options
-            responsive: true, // Enable responsive design
+            language: {
+                processing: "Procesando...",
+                search: "Buscar:",
+                lengthMenu: "Mostrar _MENU_ registros",
+                info: "Mostrando _START_ a _END_ de _TOTAL_ usuarios",
+                infoEmpty: "Mostrando 0 a 0 de 0 usuarios",
+                infoFiltered: "(filtrado de _MAX_ usuarios totales)",
+                loadingRecords: "Cargando registros...",
+                zeroRecords: "No se encontraron usuarios coincidentes",
+                emptyTable: "No hay usuarios disponibles",
+                paginate: {
+                    first: "Primero",
+                    previous: "Anterior",
+                    next: "Siguiente",
+                    last: "Último"
+                }
+            },
+            deferRender: true,
+            paging: true,
+            responsive: true,
+            dom: "<'row'<'col-sm-12'tr>><'row'<'col-sm-6'i><'col-sm-6 text-right'p>>",
+            drawCallback: function (settings) {
+                var api = this.api();
+                var info = api.page.info();
+                var total = (info && info.recordsTotal !== undefined) ? info.recordsTotal : 0;
+                $('#lblTotalRegistros').text(total.toLocaleString('es-AR') + ' registros');
+            }
+        });
+
+        // Eventos de filtros para persistir de inmediato y recargar la tabla
+        $('#filtroRoles').on('change', function () {
+            setSavedFilter('filtroroles', $(this).val());
+            usersTable.ajax.reload();
+        });
+
+        $('#filtroIncobrable').on('change', function () {
+            setSavedFilter('filtroincobrable', $(this).val());
+            usersTable.ajax.reload();
+        });
+
+        $('#filtroTipoUsuario').on('change', function () {
+            setSavedFilter('filtrotipousuario', $(this).val());
+            usersTable.ajax.reload();
+        });
+
+        $('#customPageLength').on('change', function () {
+            var len = parseInt($(this).val(), 10) || 10;
+            setSavedFilter('custompagelength', len);
+            usersTable.page.len(len).draw();
+        });
+
+        // Conectar búsqueda con debounce y guardado inmediato
+        var searchTimer = null;
+        $('#customSearchInput').on('keyup input', function () {
+            var term = this.value;
+            setSavedFilter('customsearchinput', term);
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(function () {
+                usersTable.search(term).draw();
+            }, 300);
+        });
+
+        // Botón recargar (conserva la página y filtros actuales)
+        $('#btnReloadTable').on('click', function () {
+            usersTable.ajax.reload(null, false);
+        });
+
+        // Botón limpiar todos los filtros
+        $('#btnClearFilters').on('click', function () {
+            $('#customSearchInput').val('');
+            setSavedFilter('customsearchinput', '');
+
+            $('#filtroRoles').val('');
+            setSavedFilter('filtroroles', '');
+
+            $('#filtroIncobrable').val('');
+            setSavedFilter('filtroincobrable', '');
+
+            $('#filtroTipoUsuario').val('');
+            setSavedFilter('filtrotipousuario', '');
+
+            $('#customPageLength').val('10');
+            setSavedFilter('custompagelength', 10);
+            usersTable.page.len(10);
+
+            if (window.PortalFilterManager && window.PortalFilterManager.clearCurrentPage) {
+                window.PortalFilterManager.clearCurrentPage();
+            }
+
+            usersTable.search('').columns().search('');
+            usersTable.ajax.reload();
+        });
+
+        // Delegated AJAX interceptor for ChangeCategory modal
+        $(document).off('submit', 'form[action*="ChangeCategory"]').on('submit', 'form[action*="ChangeCategory"]', function (e) {
+            e.preventDefault();
+            var $form = $(this);
+            var $btn = $form.find('input[type="submit"], button[type="submit"]');
+            var origVal = $btn.is('input') ? $btn.val() : $btn.html();
+            if ($btn.is('input')) { $btn.prop('disabled', true).val('Guardando...'); } else { $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Guardando...'); }
+
+            $.ajax({
+                url: $form.attr('action') || '/Administracion/Usuarios/ChangeCategory',
+                type: 'POST',
+                data: $form.serialize(),
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                success: function (res) {
+                    if ($btn.is('input')) { $btn.prop('disabled', false).val(origVal); } else { $btn.prop('disabled', false).html(origVal); }
+                    if (res && res.success) {
+                        $form.closest('.modal').modal('hide');
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                toast: true,
+                                position: 'top-end',
+                                icon: 'success',
+                                title: res.message || 'Categoría actualizada correctamente',
+                                showConfirmButton: false,
+                                timer: 3000
+                            });
+                        }
+                        usersTable.ajax.reload(null, false);
+                    } else {
+                        var msg = (res && res.message) ? res.message : 'Error al cambiar categoría';
+                        if (typeof Swal !== 'undefined') { Swal.fire('Error', msg, 'error'); } else { alert(msg); }
+                    }
+                },
+                error: function (xhr) {
+                    if ($btn.is('input')) { $btn.prop('disabled', false).val(origVal); } else { $btn.prop('disabled', false).html(origVal); }
+                    var msg = 'Error de conexión al procesar la solicitud.';
+                    if (xhr && xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                    if (typeof Swal !== 'undefined') { Swal.fire('Error', msg, 'error'); } else { alert(msg); }
+                }
+            });
+        });
+
+        // Delegated AJAX interceptor for _ChangePassword modal
+        $(document).off('submit', 'form[action*="_ChangePassword"]').on('submit', 'form[action*="_ChangePassword"]', function (e) {
+            e.preventDefault();
+            var $form = $(this);
+            var $btn = $form.find('input[type="submit"], button[type="submit"]');
+            var origVal = $btn.is('input') ? $btn.val() : $btn.html();
+            if ($btn.is('input')) { $btn.prop('disabled', true).val('Guardando...'); } else { $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Guardando...'); }
+
+            $.ajax({
+                url: $form.attr('action') || '/Administracion/Usuarios/_ChangePassword',
+                type: 'POST',
+                data: $form.serialize(),
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                success: function (res) {
+                    if ($btn.is('input')) { $btn.prop('disabled', false).val(origVal); } else { $btn.prop('disabled', false).html(origVal); }
+                    if (res && res.success) {
+                        $form.closest('.modal').modal('hide');
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                toast: true,
+                                position: 'top-end',
+                                icon: 'success',
+                                title: res.message || 'Contraseña actualizada correctamente',
+                                showConfirmButton: false,
+                                timer: 3000
+                            });
+                        }
+                    } else {
+                        var msg = (res && res.message) ? res.message : 'Error al cambiar contraseña';
+                        if (typeof Swal !== 'undefined') { Swal.fire('Error', msg, 'error'); } else { alert(msg); }
+                    }
+                },
+                error: function (xhr) {
+                    if ($btn.is('input')) { $btn.prop('disabled', false).val(origVal); } else { $btn.prop('disabled', false).html(origVal); }
+                    var msg = 'Error de conexión al procesar la solicitud.';
+                    if (xhr && xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                    if (typeof Swal !== 'undefined') { Swal.fire('Error', msg, 'error'); } else { alert(msg); }
+                }
+            });
+        });
+
+        // Delegated AJAX interceptor for Update (Edit User) modal
+        $(document).off('submit', 'form[action*="Update"]').on('submit', 'form[action*="Update"]', function (e) {
+            e.preventDefault();
+            var $form = $(this);
+            var $btn = $form.find('input[type="submit"], button[type="submit"]');
+            var origVal = $btn.is('input') ? $btn.val() : $btn.html();
+            if ($btn.is('input')) { $btn.prop('disabled', true).val('Guardando...'); } else { $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Guardando...'); }
+
+            $.ajax({
+                url: $form.attr('action') || '/Administracion/Usuarios/Update',
+                type: 'POST',
+                data: $form.serialize(),
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                success: function (res) {
+                    if ($btn.is('input')) { $btn.prop('disabled', false).val(origVal); } else { $btn.prop('disabled', false).html(origVal); }
+                    if (res && res.success) {
+                        $form.closest('.modal').modal('hide');
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                toast: true,
+                                position: 'top-end',
+                                icon: 'success',
+                                title: res.message || 'Usuario actualizado correctamente',
+                                showConfirmButton: false,
+                                timer: 3000
+                            });
+                        }
+                        usersTable.ajax.reload(null, false);
+                    } else {
+                        var msg = (res && res.message) ? res.message : 'Error al actualizar usuario';
+                        if (typeof Swal !== 'undefined') { Swal.fire('Error', msg, 'error'); } else { alert(msg); }
+                    }
+                },
+                error: function (xhr) {
+                    if ($btn.is('input')) { $btn.prop('disabled', false).val(origVal); } else { $btn.prop('disabled', false).html(origVal); }
+                    var msg = 'Error de conexión al procesar la solicitud.';
+                    if (xhr && xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                    if (typeof Swal !== 'undefined') { Swal.fire('Error', msg, 'error'); } else { alert(msg); }
+                }
+            });
+        });
+
+        // Exportar a CSV
+        $('#btnExportar').on('click', function () {
+            exportarUsuariosCSV();
         });
     });
+
+    // Función de exportación a CSV
+    function exportarUsuariosCSV() {
+        var table = $('#usersTable').DataTable();
+        var data = table.rows({ search: 'applied' }).data().toArray();
+        if (!data || data.length === 0) {
+            Swal.fire("Atención", "No hay registros disponibles para exportar.", "info");
+            return;
+        }
+
+        var headers = ["Nro Documento", "Nro de Tarjeta", "Usuario", "Nombre", "Categoria", "Roles", "Incobrable", "Tipo"];
+        var rows = [headers.join(",")];
+
+        data.forEach(function (row) {
+            var uRoles = (typeof userRolesMap !== 'undefined' && userRolesMap && userRolesMap[row.Id]) 
+                         ? userRolesMap[row.Id].join('; ') 
+                         : 'Sin roles';
+
+            var line = [
+                '"' + (row.NroDocumento || '').replace(/"/g, '""') + '"',
+                '"' + (row.NroTarjeta || '').replace(/"/g, '""') + '"',
+                '"' + (row.Usuario || '').replace(/"/g, '""') + '"',
+                '"' + (row.Nombre || '').replace(/"/g, '""') + '"',
+                '"' + (row.Categoria || '').replace(/"/g, '""') + '"',
+                '"' + uRoles.replace(/"/g, '""') + '"',
+                '"' + (row.Incobrable ? 'Si' : 'No') + '"',
+                '"' + (row.TipoUsuario || '').replace(/"/g, '""') + '"'
+            ];
+            rows.push(line.join(","));
+        });
+
+        var csvContent = "data:text/csv;charset=utf-8,\uFEFF" + rows.join("\n");
+        var encodedUri = encodeURI(csvContent);
+        var link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "usuarios_estancias_" + new Date().toISOString().slice(0, 10) + ".csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
 
     function toggleIncobrable(id) {
         Swal.fire({
@@ -115,8 +694,8 @@
             text: "¿Desea cambiar el estado de Incobrable de este usuario?",
             icon: "warning",
             showCancelButton: true,
-            confirmButtonColor: "#3085d6",
-            cancelButtonColor: "#d33",
+            confirmButtonColor: "#2563eb",
+            cancelButtonColor: "#64748b",
             confirmButtonText: "Sí, cambiar estado",
             cancelButtonText: "Cancelar"
         }).then((result) => {
@@ -139,5 +718,50 @@
                 });
             }
         });
+    }
+
+    function renderCategoryPill(name, colorCode) {
+        if (!name || name === 'Sin Categoría' || name === 'Sin Categoria') {
+            return '<span class="badge-pill badge-pill-slate">Sin Categoría</span>';
+        }
+
+        var color = (colorCode || '').trim();
+        if (!color) {
+            return '<span class="badge-pill badge-pill-purple">' + name + '</span>';
+        }
+
+        if (!color.startsWith('#') && !color.startsWith('rgb')) {
+            color = '#' + color;
+        }
+
+        var bg = color;
+        var border = color;
+        var text = color;
+
+        if (color.startsWith('#')) {
+            var hex = color.replace('#', '');
+            if (hex.length === 3) {
+                hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+            }
+            if (hex.length >= 6) {
+                var r = parseInt(hex.substring(0, 2), 16);
+                var g = parseInt(hex.substring(2, 4), 16);
+                var b = parseInt(hex.substring(4, 6), 16);
+                bg = 'rgba(' + r + ', ' + g + ', ' + b + ', 0.12)';
+                border = 'rgba(' + r + ', ' + g + ', ' + b + ', 0.35)';
+
+                var luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+                if (luminance > 0.72) {
+                    var rDark = Math.max(0, Math.floor(r * 0.7));
+                    var gDark = Math.max(0, Math.floor(g * 0.7));
+                    var bDark = Math.max(0, Math.floor(b * 0.7));
+                    text = 'rgb(' + rDark + ', ' + gDark + ', ' + bDark + ')';
+                } else {
+                    text = color;
+                }
+            }
+        }
+
+        return '<span class="badge-pill" style="background-color: ' + bg + ' !important; color: ' + text + ' !important; border: 1px solid ' + border + ' !important;">' + name + '</span>';
     }
 </script>

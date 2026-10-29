@@ -1,64 +1,232 @@
-@{
-    ViewData["Title"] = "Roles de Seguridad";
-}
-
 @using Commons.Identity
 @model IEnumerable<CommonsRole>
+@{
+    ViewData["Title"] = "Roles de Seguridad";
+    ViewData["BackArrow"] = "/Home/Index";
+}
 
-<div class="box box-info">
-    <div class="box-header with-border filtro-grilla">
-        <span class="txt-titulo-box">Listado de Roles de Seguridad</span>
-        <div class="input-group input-group-sm pull-right" style="max-width: 300px;">
-            <a onclick="nuevoRole()" class="btn btn-info btn-sm">
-                <i class="fa fa-plus"><span class="hidden-xs"> Nuevo Rol</span></i>
-            </a>
+@functions {
+    public static (string ModuleName, string Subcategory, string BadgeClass, string Icon) GetSidebarModule(string showName, string name, string desc)
+    {
+        var rawDesc = desc ?? "";
+        var subcat = "";
+        if (rawDesc.StartsWith("[") && rawDesc.Contains("]"))
+        {
+            var closingIdx = rawDesc.IndexOf("]");
+            var bracketContent = rawDesc.Substring(1, closingIdx - 1).Trim();
+            var parts = bracketContent.Split(new[] { '>', '/', '|' }, StringSplitOptions.RemoveEmptyEntries)
+                                      .Select(p => p.Trim())
+                                      .ToArray();
+            var cat = parts.Length > 0 ? parts[0].ToLower() : "";
+            if (parts.Length > 1) { subcat = parts[1]; }
+
+            if (cat.Contains("dato"))
+            {
+                return ("Datos", subcat, "badge-pill-purple", "fa fa-database");
+            }
+            if (cat.Contains("reporte") || cat.Contains("informe") || cat.Contains("estadistic"))
+            {
+                return ("Reportes", subcat, "badge-pill-green", "fa fa-bar-chart");
+            }
+            if (cat.Contains("sistema") || cat.Contains("seguridad") || cat.Contains("admin"))
+            {
+                return ("Sistema", subcat, "badge-pill-slate", "fa fa-shield");
+            }
+            if (cat.Contains("gestion") || cat.Contains("gestión") || cat.Contains("gesti"))
+            {
+                return ("Gestión", subcat, "badge-pill-blue", "fa fa-briefcase");
+            }
+        }
+
+        var text = ((showName ?? "") + " " + (name ?? "") + " " + (desc ?? "")).ToLower();
+        var isCupon = text.Contains("cupon") || text.Contains("cupón") || text.Contains("puntos") || text.Contains("premio");
+
+        if (text.Contains("reporte") || text.Contains("informe") || text.Contains("estadistica") || text.Contains("estadística") || text.Contains("auditoria") || text.Contains("balance") || text.Contains("resumen") || text.Contains("liquidac"))
+        {
+            return ("Reportes", subcat, "badge-pill-green", "fa fa-bar-chart");
+        }
+        if (text.Contains("seguridad") || text.Contains("usuario") || text.Contains("rol") || text.Contains("funcion") || text.Contains("función") || text.Contains("admin") || text.Contains("perfil"))
+        {
+            return ("Sistema", subcat, "badge-pill-slate", "fa fa-shield");
+        }
+        if (text.Contains("sucursal") || text.Contains("proveedor - rubro") || text.Contains("rubro") || text.Contains("marca") || text.Contains("documento") || text.Contains("moneda") || text.Contains("pais") || text.Contains("provincia") || text.Contains("localidad") || text.Contains("tipo") || text.Contains("grupo") || text.Contains("empresa") || text.Contains("prestamo") || text.Contains("concepto") || text.Contains("cuenta") || text.Contains("billetera") || text.Contains("leyenda") || text.Contains("dato"))
+        {
+            return ("Datos", subcat, "badge-pill-purple", "fa fa-database");
+        }
+
+        if (string.IsNullOrEmpty(subcat) && isCupon)
+        {
+            subcat = "Cupones";
+        }
+        return ("Gestión", subcat, "badge-pill-blue", "fa fa-briefcase");
+    }
+}
+
+<style>
+    .content-header {
+        display: none !important;
+    }
+
+    .table-code-sysname {
+        font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 11.5px;
+        color: #475569;
+        background: #f8fafc;
+        padding: 3px 8px;
+        border-radius: 6px;
+        border: 1px solid #e2e8f0;
+        display: inline-block;
+        max-width: 260px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+</style>
+
+<!-- Page Header (Title + Subtitle + Action Buttons) -->
+<div class="page-header-row">
+    <div class="page-header-left">
+        <div class="page-header-title-wrap">
+            <h1 class="modern-page-title">Roles y Permisos</h1>
+            <span class="badge-total-registros" id="lblTotalRolesCount">@Model.Count() roles registrados</span>
+        </div>
+        <p class="modern-page-subtitle">Gestión de perfiles de acceso y asignación de permisos referenciados a las opciones del menú lateral.</p>
+    </div>
+    <div class="page-header-actions">
+        <button type="button" onclick="nuevoRole('')" class="btn btn-primary btn-sm" title="Crear un nuevo Rol de Seguridad vinculado al menú">
+            <i class="fa fa-plus"></i> Nuevo Rol
+        </button>
+    </div>
+</div>
+
+<!-- White Card Container -->
+<div class="modern-card has-custom-toolbar">
+    <!-- Card Toolbar (Search + Filters + PageLength + Refresh) -->
+    <div class="card-toolbar">
+        <div class="card-toolbar-left">
+            <div class="modern-search-wrapper">
+                <i class="fa fa-search modern-search-icon"></i>
+                <input type="text" id="searchRolesInput" class="form-control modern-search-input" placeholder="Buscar por rol, módulo del menú o función...">
+            </div>
+        </div>
+        <div class="card-toolbar-right">
+            <select id="filtroModuloSidebar" class="form-control modern-select" style="width: 175px;">
+                <option value="">Todos los módulos</option>
+                <option value="Gestión">Módulo Gestión</option>
+                <option value="Datos">Módulo Datos</option>
+                <option value="Reportes">Módulo Reportes</option>
+                <option value="Sistema">Módulo Sistema</option>
+            </select>
+
+            <select id="filtroEstadoRol" class="form-control modern-select" style="width: 145px;">
+                <option value="">Todos los estados</option>
+                <option value="Activo">Habilitados</option>
+                <option value="Inactivo">Inhabilitados</option>
+            </select>
+
+            <div class="modern-length-wrapper">
+                <span>Mostrar:</span>
+                <select id="customPageLengthRoles" class="form-control modern-select-sm" style="width: 68px;">
+                    <option value="10" selected>10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+
+            <button type="button" id="btnClearRolesFilters" class="btn-clear-filters" title="Limpiar todos los filtros">
+                <i class="fa fa-eraser"></i> <span class="hidden-xs">Limpiar filtros</span>
+            </button>
+
+            <button type="button" id="btnReloadRoles" class="btn-icon-reload" title="Recargar tabla">
+                <i class="fa fa-refresh"></i>
+            </button>
         </div>
     </div>
-    <div class="box-body">
-        <table id="listadoRoles" class="table table-hover table-bordered table-responsive borde_interno">
+
+    <!-- Table -->
+    <div class="table-responsive">
+        <table id="listadoRoles" class="table table-hover table-bordered table-responsive borde_interno modern-table">
             <thead>
                 <tr>
-                    <th>Nombre a Mostrar</th>
-                    <th>Nombre de Sistema</th>
-                    <th>Descripción</th>
-                    <th>Funciones Asignadas</th>
-                    <th>Habilitado</th>
-                    <th>Acciones</th>
+                    <th>NOMBRE A MOSTRAR</th>
+                    <th>MÓDULO SIDEBAR</th>
+                    <th>NOMBRE DE SISTEMA</th>
+                    <th>DESCRIPCIÓN</th>
+                    <th>FUNCIONES ASIGNADAS</th>
+                    <th class="text-center">ESTADO</th>
+                    <th class="text-center">ACCIONES</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (var item in Model)
                 {
+                    var modInfo = GetSidebarModule(item.ShowName, item.Name, item.Description);
                     <tr>
-                        <td>@item.ShowName</td>
-                        <td>@item.Name</td>
-                        <td>@item.Description</td>
+                        <td>
+                            <span style="font-weight: 600; color: #1e293b; font-size: 13px;">@item.ShowName</span>
+                        </td>
+                        <td data-search="@modInfo.ModuleName @modInfo.Subcategory">
+                            <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px;">
+                                <span class="badge-pill @modInfo.BadgeClass">
+                                    <i class="@modInfo.Icon"></i> @modInfo.ModuleName
+                                </span>
+                                @if (!string.IsNullOrEmpty(modInfo.Subcategory))
+                                {
+                                    <span style="font-size: 11px; color: #64748b; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
+                                        <i class="fa fa-folder-o text-muted"></i> @modInfo.Subcategory
+                                    </span>
+                                }
+                            </div>
+                        </td>
+                        <td>
+                            <span class="table-code-sysname" title="@item.Name">@item.Name</span>
+                        </td>
+                        <td>
+                            @{
+                                var cleanDesc = item.Description ?? "";
+                                if (cleanDesc.StartsWith("[") && cleanDesc.Contains("]"))
+                                {
+                                    var closeIdx = cleanDesc.IndexOf("]");
+                                    cleanDesc = cleanDesc.Substring(closeIdx + 1).Trim();
+                                }
+                            }
+                            <span style="color: #64748b; font-size: 12px;">@(string.IsNullOrEmpty(cleanDesc) ? (string.IsNullOrEmpty(item.Description) ? "-" : item.Description) : cleanDesc)</span>
+                        </td>
                         <td>
                             @{
                                 var roleFuncs = ViewBag.RoleFunctions as Dictionary<string, List<string>>;
-                                if (roleFuncs != null && roleFuncs.TryGetValue(item.Id, out var funcNames))
+                                if (roleFuncs != null && roleFuncs.TryGetValue(item.Id, out var funcNames) && funcNames.Any())
                                 {
-                                    foreach (var name in funcNames)
-                                    {
-                                        <span class="label label-primary" style="margin-right: 4px; display: inline-block; margin-bottom: 4px;">@name</span>
-                                    }
+                                    <div style="display: flex; flex-wrap: wrap; gap: 4px; max-width: 320px;">
+                                        @foreach (var name in funcNames)
+                                        {
+                                            <span class="badge-pill badge-pill-slate" style="font-size: 10.5px; padding: 2px 7px;">@name</span>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="text-muted" style="font-size: 11.5px; font-style: italic;">Sin funciones</span>
                                 }
                             }
                         </td>
-                        <td class="text-center">
+                        <td class="text-center" data-search="@(item.Enabled ? "Activo" : "Inactivo")">
                             @if (item.Enabled)
                             {
-                                <span class="label label-success">Sí</span>
+                                <span class="badge-pill badge-pill-green"><i class="fa fa-check"></i> Activo</span>
                             }
                             else
                             {
-                                <span class="label label-danger">No</span>
+                                <span class="badge-pill badge-pill-red"><i class="fa fa-times"></i> Inactivo</span>
                             }
                         </td>
                         <td class="text-center">
-                            <a onclick="editRole('@item.Id')" title="Editar Rol" class="btn btn-info btn-xs"><i class="fa fa-pencil"></i></a>
-                            <a onclick="assignFunctions('@item.Id')" title="Asignar Funciones" class="btn btn-primary btn-xs"><i class="fa fa-key"></i></a>
-                            <a asp-action="Delete" asp-route-id="@item.Id" confirm-icon="Danger" confirm-no="Cancelar" confirm-yes="Borrar" confirm="¿Está seguro de borrar este Rol?" class="btn btn-danger btn-xs"><i class="fa fa-trash"></i></a>
+                            <div class="action-buttons-group">
+                                <a onclick="editRole('@item.Id')" title="Editar Rol" class="btn btn-info btn-xs"><i class="fa fa-pencil"></i></a>
+                                <a onclick="assignFunctions('@item.Id')" title="Asignar Funciones" class="btn btn-primary btn-xs"><i class="fa fa-key"></i></a>
+                                <a asp-action="Delete" asp-route-id="@item.Id" confirm-icon="Danger" confirm-no="Cancelar" confirm-yes="Borrar" confirm="¿Está seguro de borrar este Rol?" title="Eliminar Rol" class="btn btn-danger btn-xs"><i class="fa fa-trash"></i></a>
+                            </div>
                         </td>
                     </tr>
                 }
@@ -67,24 +235,83 @@
     </div>
 </div>
 
-<modal title="Nuevo Rol" callback-modal="true" function="nuevoRole" load-url="/SecurityRoles/_Create" size="Medium"></modal>
-<modal title="Editar Rol" callback-modal="true" function="editRole" load-url="/SecurityRoles/_Update/" size="Medium"></modal>
-<modal title="Asignar Funciones al Rol" callback-modal="true" function="assignFunctions" load-url="/SecurityRoles/_AssignFunctions/" size="Medium"></modal>
+<modal title="Nuevo Rol" callback-modal="true" function="nuevoRole" load-url="/SecurityRoles/_Create" size="Large"></modal>
+<modal title="Editar Rol" callback-modal="true" function="editRole" load-url="/SecurityRoles/_Update/" size="Large"></modal>
+<modal title="Asignar Funciones al Rol" callback-modal="true" function="assignFunctions" load-url="/SecurityRoles/_AssignFunctions/" size="Large"></modal>
 
 <script>
     $(document).ready(function () {
-        $('#listadoRoles').DataTable({
-            "columnDefs": [
-                { "width": "15%", "targets": 0 },
-                { "width": "15%", "targets": 1 },
-                { "width": "30%", "targets": 2 },
-                { "width": "20%", "targets": 3 },
-                { "width": "10%", "class": "text-center", "targets": 4 },
-                { "width": "10%", "class": "text-center", "searchable": false, "orderable": false, "targets": 5 }
+        var table = $('#listadoRoles').DataTable({
+            dom: 'rtip',
+            pageLength: 10,
+            order: [[0, 'asc']],
+            columnDefs: [
+                { targets: 0, responsivePriority: 1 },
+                { targets: 1, responsivePriority: 2 },
+                { targets: 2, responsivePriority: 4 },
+                { targets: 3, responsivePriority: 5 },
+                { targets: 4, responsivePriority: 3 },
+                { targets: 5, responsivePriority: 2, className: 'text-center' },
+                { targets: 6, responsivePriority: 1, searchable: false, orderable: false, className: 'text-center' }
             ],
-            "language": {
-                'url': '@Url.Content("~/lib/arg.json")'
+            language: {
+                processing: "Procesando...",
+                search: "Buscar:",
+                lengthMenu: "Mostrar _MENU_ registros",
+                info: "Mostrando _START_ a _END_ de _TOTAL_ roles",
+                infoEmpty: "Mostrando 0 a 0 de 0 roles",
+                infoFiltered: "(filtrado de _MAX_ roles)",
+                loadingRecords: "Cargando...",
+                zeroRecords: "No se encontraron roles coincidentes",
+                emptyTable: "No hay roles registrados en el sistema",
+                paginate: {
+                    first: "Primero",
+                    previous: "Anterior",
+                    next: "Siguiente",
+                    last: "Último"
+                }
             }
+        });
+
+        // Live Search Input
+        $('#searchRolesInput').on('keyup input', function () {
+            table.search(this.value).draw();
+        });
+
+        // Module Filter (Column 1 is MÓDULO SIDEBAR)
+        $('#filtroModuloSidebar').on('change', function () {
+            var val = $(this).val();
+            table.column(1).search(val ? val : '').draw();
+        });
+
+        // Status Filter (Column 5 is ESTADO)
+        $('#filtroEstadoRol').on('change', function () {
+            var val = $(this).val();
+            table.column(5).search(val ? val : '').draw();
+        });
+
+        // Page Length
+        $('#customPageLengthRoles').on('change', function () {
+            table.page.len(parseInt($(this).val(), 10)).draw();
+        });
+
+        // Refresh Button
+        $('#btnReloadRoles').on('click', function () {
+            location.reload();
+        });
+
+        // Clear Filters Button
+        $('#btnClearRolesFilters').on('click', function () {
+            $('#searchRolesInput').val('');
+            $('#filtroModuloSidebar').val('');
+            $('#filtroEstadoRol').val('');
+            $('#customPageLengthRoles').val('10');
+
+            if (window.PortalFilterManager && window.PortalFilterManager.clearCurrentPage) {
+                window.PortalFilterManager.clearCurrentPage();
+            }
+
+            table.search('').columns().search('').page.len(10).draw();
         });
     });
 </script>

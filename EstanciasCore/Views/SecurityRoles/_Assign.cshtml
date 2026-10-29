@@ -1,58 +1,1263 @@
-@using Commons.HtmlHelpers
 @using Commons.Identity
 @using DAL.Models
+@functions {
+    public class RoleHierarchyItem
+    {
+        public CommonsRole Role { get; set; }
+        public string Subcategory { get; set; }
+        public string CleanDescription { get; set; }
+    }
+
+    public static (string Category, string Subcategory, string CleanDesc) ParseRoleCategoryAndSubcat(CommonsRole role)
+    {
+        var desc = role.Description ?? "";
+        var name = role.ShowName ?? role.Name ?? "";
+        var cat = "";
+        var subcat = "";
+        var cleanDesc = desc;
+
+        if (desc.StartsWith("[") && desc.Contains("]"))
+        {
+            var closingIdx = desc.IndexOf("]");
+            var bracketContent = desc.Substring(1, closingIdx - 1).Trim();
+            cleanDesc = desc.Substring(closingIdx + 1).Trim();
+
+            var parts = bracketContent.Split(new[] { '>', '/', '|' }, StringSplitOptions.RemoveEmptyEntries)
+                                      .Select(p => p.Trim())
+                                      .ToArray();
+            if (parts.Length > 0) { cat = parts[0]; }
+            if (parts.Length > 1) { subcat = parts[1]; }
+        }
+
+        var lowerCat = cat.ToLower();
+        var mainCategory = "Gestión";
+        if (lowerCat.Contains("dato"))
+        {
+            mainCategory = "Datos";
+        }
+        else if (lowerCat.Contains("reporte") || lowerCat.Contains("informe") || lowerCat.Contains("estadistic"))
+        {
+            mainCategory = "Reportes";
+        }
+        else if (lowerCat.Contains("sistema") || lowerCat.Contains("seguridad") || lowerCat.Contains("admin"))
+        {
+            mainCategory = "Sistema";
+        }
+        else if (lowerCat.Contains("gestion") || lowerCat.Contains("gestión") || lowerCat.Contains("gesti"))
+        {
+            mainCategory = "Gestión";
+        }
+        else
+        {
+            var text = (name + " " + (role.Name ?? "") + " " + desc).ToLower();
+            if (text.Contains("reporte") || text.Contains("informe") || text.Contains("estadistica") || text.Contains("auditoria") || text.Contains("balance") || text.Contains("resumen") || text.Contains("liquidac"))
+            {
+                mainCategory = "Reportes";
+            }
+            else if (text.Contains("comprobante") || text.Contains("usuario") || text.Contains("sistema") || text.Contains("admin") || text.Contains("rol") || text.Contains("permiso") || text.Contains("funcion") || text.Contains("función") || text.Contains("seguridad") || text.Contains("perfil"))
+            {
+                mainCategory = "Sistema";
+            }
+            else if (text.Contains("documento") || text.Contains("sucursal") || text.Contains("empresa") || text.Contains("tarjeta estancia") || text.Contains("moneda") || text.Contains("pais") || text.Contains("país") || text.Contains("provincia") || text.Contains("localidad") || text.Contains("rubro") || text.Contains("billetera") || text.Contains("cuenta corriente") || text.Contains("dato"))
+            {
+                mainCategory = "Datos";
+            }
+            else
+            {
+                mainCategory = "Gestión";
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(subcat) && mainCategory == "Gestión")
+        {
+            var text = (name + " " + (role.Name ?? "") + " " + desc).ToLower();
+            // Solo en Gestión se sugiere agrupación para los roles existentes de cupones
+            if (text.Contains("cupon") || text.Contains("cupón") || text.Contains("puntos") || text.Contains("premio"))
+            {
+                subcat = "Cupones";
+            }
+        }
+
+        return (mainCategory, subcat, cleanDesc);
+    }
+}
 @{
-    ViewData["Title"] = "Modificar Roles de Usuario";
+    ViewData["Title"] = "Asignar Permisos y Roles Locales";
     var user = ViewBag.User as Usuario;
     var roles = ViewBag.Roles as List<CommonsRole> ?? new List<CommonsRole>();
     var assignedRoleIds = ViewBag.AssignedRoleIds as List<string> ?? new List<string>();
+
+    var modDatos = new {
+        Key = "datos",
+        Title = "Datos",
+        Description = "Tipos de documento, sucursales, empresas, monedas y cuentas corrientes.",
+        RoleItems = new List<RoleHierarchyItem>()
+    };
+    var modGestion = new {
+        Key = "gestion",
+        Title = "Gestión",
+        Description = "Marketing, cupones, cobranzas de tarjeta, promociones, catálogo y novedades.",
+        RoleItems = new List<RoleHierarchyItem>()
+    };
+    var modReportes = new {
+        Key = "reportes",
+        Title = "Reportes",
+        Description = "Métricas analíticas, informes periódicos y conciliación financiera.",
+        RoleItems = new List<RoleHierarchyItem>()
+    };
+    var modSistema = new {
+        Key = "sistema",
+        Title = "Sistema",
+        Description = "Administración de usuarios, comprobantes, roles locales y funciones de seguridad.",
+        RoleItems = new List<RoleHierarchyItem>()
+    };
+
+    var leftModules = new[] { modDatos, modReportes, modSistema };
+    var rightModules = new[] { modGestion };
+
+    foreach (var r in roles)
+    {
+        var h = ParseRoleCategoryAndSubcat(r);
+        var item = new RoleHierarchyItem {
+            Role = r,
+            Subcategory = h.Subcategory,
+            CleanDescription = h.CleanDesc
+        };
+
+        if (h.Category == "Datos")
+        {
+            modDatos.RoleItems.Add(item);
+        }
+        else if (h.Category == "Reportes")
+        {
+            modReportes.RoleItems.Add(item);
+        }
+        else if (h.Category == "Sistema")
+        {
+            modSistema.RoleItems.Add(item);
+        }
+        else
+        {
+            modGestion.RoleItems.Add(item);
+        }
+    }
+
+    var userNameDisplay = user?.UserName ?? "Usuario";
+    var userEmailDisplay = !string.IsNullOrEmpty(user?.Mail)
+        ? user.Mail
+        : (!string.IsNullOrEmpty(user?.Email)
+            ? user.Email
+            : (user?.Personas != null && !string.IsNullOrEmpty(user.Personas.Email)
+                ? user.Personas.Email
+                : "Sin correo registrado"));
 }
 
-<form asp-action="_Assign" asp-controller="SecurityRoles" method="post">
-    @using (Html.BoxBody())
-    {
-        <input type="hidden" name="userId" value="@user.Id" />
-        
-        <div class="well">
-            <h4>Usuario: <strong>@user.UserName</strong></h4>
-            <p>Seleccione los roles que desea asignar a este usuario.</p>
+<style>
+    /* Scoped Styles for Role Assign Modal */
+    .role-modal-container {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        color: #1e293b;
+        padding: 4px;
+    }
+
+    /* Custom Header */
+    .role-modal-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .role-modal-header-left {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+
+    .role-shield-badge {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: #eff6ff;
+        border: 1px solid #dbeafe;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #2563eb;
+        font-size: 20px;
+        flex-shrink: 0;
+    }
+
+    .role-header-titles {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .role-header-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0;
+        line-height: 1.25;
+    }
+
+    .role-header-subtitle {
+        font-size: 13px;
+        color: #64748b;
+        margin: 0;
+    }
+
+    .role-header-subtitle strong {
+        color: #1e293b;
+        font-weight: 600;
+    }
+
+    .role-modal-close-btn {
+        background: transparent;
+        border: none;
+        font-size: 24px;
+        line-height: 1;
+        color: #94a3b8;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 6px;
+        transition: all 0.15s ease;
+    }
+
+    .role-modal-close-btn:hover {
+        color: #0f172a;
+        background: #f1f5f9;
+    }
+
+    /* Toolbar de Módulos y Filtro */
+    .role-toolbar-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 14px;
+        gap: 16px;
+    }
+
+    .role-toolbar-title {
+        font-size: 11.5px;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        color: #475569;
+        text-transform: uppercase;
+    }
+
+    .role-toolbar-title .badge-count {
+        color: #0284c7;
+        font-weight: 700;
+    }
+
+    .role-search-wrap {
+        position: relative;
+        width: 230px;
+    }
+
+    .role-search-wrap .fa-search {
+        position: absolute;
+        left: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #94a3b8;
+        font-size: 12px;
+        pointer-events: none;
+    }
+
+    .role-search-input {
+        width: 100%;
+        height: 32px !important;
+        padding: 5px 12px 5px 30px !important;
+        font-size: 12px !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 7px !important;
+        background: #ffffff !important;
+        color: #1e293b !important;
+        outline: none !important;
+        transition: all 0.15s ease;
+    }
+
+    .role-search-input:focus {
+        border-color: #3c8dbc !important;
+        box-shadow: 0 0 0 2px rgba(60, 141, 188, 0.15) !important;
+    }
+
+    /* Contenedor de 2 Columnas Balanceadas (Izquierda: Datos + Reportes + Sistema | Derecha: Gestión) */
+    .role-modules-columns {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+        align-items: start;
+        margin-bottom: 22px;
+    }
+
+    @@media (max-width: 860px) {
+        .role-modules-columns {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .role-modules-col-left {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .role-modules-col-right {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .role-module-card {
+        border: 1.5px solid #e2e8f0;
+        border-radius: 12px;
+        background: #ffffff;
+        padding: 16px 16px 14px 16px;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+        transition: border-color 0.15s ease;
+    }
+
+    .role-module-card-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 12px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .role-module-titles {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .role-module-name {
+        font-size: 14.5px;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0;
+    }
+
+    .role-module-desc {
+        font-size: 11.5px;
+        color: #64748b;
+        margin: 0;
+        line-height: 1.35;
+    }
+
+    .btn-card-toggle-all {
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 10px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all 0.15s ease;
+        outline: none;
+        flex-shrink: 0;
+        border: 1px solid transparent;
+    }
+
+    /* Distinct module card colors matching sidebar groups */
+    .card-module-datos {
+        border-color: #c7d2fe !important;
+    }
+    .card-module-datos .btn-card-toggle-all {
+        background: #eef2ff;
+        color: #4f46e5;
+    }
+    .card-module-datos .btn-card-toggle-all:hover {
+        background: #e0e7ff;
+        color: #4338ca;
+    }
+    .card-module-datos .role-item-row.is-selected {
+        background: #f5f3ff !important;
+        border-color: #a5b4fc !important;
+    }
+    .card-module-datos .role-item-row.is-selected .role-item-label {
+        color: #3730a3 !important;
+    }
+    .card-module-datos .role-item-row.is-selected .role-item-shield-icon {
+        color: #4f46e5 !important;
+    }
+    .card-module-datos .role-checkbox-custom {
+        accent-color: #4f46e5;
+    }
+
+    .card-module-gestion {
+        border-color: #93c5fd !important;
+    }
+    .card-module-gestion .btn-card-toggle-all {
+        background: #e0f2fe;
+        color: #0284c7;
+    }
+    .card-module-gestion .btn-card-toggle-all:hover {
+        background: #bae6fd;
+        color: #0369a1;
+    }
+    .card-module-gestion .role-item-row.is-selected {
+        background: #f0f9ff !important;
+        border-color: #7dd3fc !important;
+    }
+    .card-module-gestion .role-item-row.is-selected .role-item-label {
+        color: #0369a1 !important;
+    }
+    .card-module-gestion .role-item-row.is-selected .role-item-shield-icon {
+        color: #0284c7 !important;
+    }
+    .card-module-gestion .role-checkbox-custom {
+        accent-color: #0284c7;
+    }
+
+    .card-module-reportes {
+        border-color: #a7f3d0 !important;
+    }
+    .card-module-reportes .btn-card-toggle-all {
+        background: #ecfdf5;
+        color: #059669;
+    }
+    .card-module-reportes .btn-card-toggle-all:hover {
+        background: #d1fae5;
+        color: #047857;
+    }
+    .card-module-reportes .role-item-row.is-selected {
+        background: #f0fdf4 !important;
+        border-color: #6ee7b7 !important;
+    }
+    .card-module-reportes .role-item-row.is-selected .role-item-label {
+        color: #065f46 !important;
+    }
+    .card-module-reportes .role-item-row.is-selected .role-item-shield-icon {
+        color: #059669 !important;
+    }
+    .card-module-reportes .role-checkbox-custom {
+        accent-color: #059669;
+    }
+
+    .card-module-sistema {
+        border-color: #99f6e4 !important;
+    }
+    .card-module-sistema .btn-card-toggle-all {
+        background: #f0fdfa;
+        color: #0d9488;
+    }
+    .card-module-sistema .btn-card-toggle-all:hover {
+        background: #ccfbf1;
+        color: #0f766e;
+    }
+    .card-module-sistema .role-item-row.is-selected {
+        background: #f0fdfa !important;
+        border-color: #5eead4 !important;
+    }
+    .card-module-sistema .role-item-row.is-selected .role-item-label {
+        color: #115e59 !important;
+    }
+    .card-module-sistema .role-item-row.is-selected .role-item-shield-icon {
+        color: #0d9488 !important;
+    }
+    .card-module-sistema .role-checkbox-custom {
+        accent-color: #0d9488;
+    }
+
+    .role-items-list {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    /* Contenedor elegante de Subgrupo (Identificación clara de agrupación) */
+    .role-subcat-section {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .role-subcat-section.is-grouped {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 8px;
+        margin: 6px 0 10px 0;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    }
+
+    .card-module-datos .role-subcat-section.is-grouped {
+        border-left: 3.5px solid #8b5cf6;
+        background: #faf8ff;
+    }
+    .card-module-gestion .role-subcat-section.is-grouped {
+        border-left: 3.5px solid #3b82f6;
+        background: #f8fafc;
+    }
+    .card-module-reportes .role-subcat-section.is-grouped {
+        border-left: 3.5px solid #10b981;
+        background: #f8fdfa;
+    }
+    .card-module-sistema .role-subcat-section.is-grouped {
+        border-left: 3.5px solid #0d9488;
+        background: #f7fcfb;
+    }
+
+    .role-group-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 2px 4px 6px 4px;
+        border-bottom: 1px solid #e2e8f0;
+        margin-bottom: 6px;
+        user-select: none;
+    }
+
+    .role-group-title {
+        font-size: 11px;
+        font-weight: 700;
+        color: #1e293b;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .card-module-datos .role-group-title i { color: #8b5cf6; }
+    .card-module-gestion .role-group-title i { color: #2563eb; }
+    .card-module-reportes .role-group-title i { color: #059669; }
+    .card-module-sistema .role-group-title i { color: #0d9488; }
+
+    .role-group-header-right {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .btn-subgroup-toggle {
+        background: #ffffff;
+        border: 1px solid #cbd5e1;
+        color: #475569;
+        font-size: 10px;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 1px 7px;
+        border-radius: 4px;
+        transition: all 0.15s ease;
+        line-height: 1.4;
+    }
+
+    .btn-subgroup-toggle:hover {
+        background: #f1f5f9;
+        color: #0f172a;
+        border-color: #94a3b8;
+    }
+
+    .role-group-count-badge {
+        font-size: 10px;
+        font-weight: 600;
+        color: #64748b;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 9999px;
+        padding: 1px 7px;
+        line-height: 1.4;
+    }
+
+    .role-subcat-section.is-grouped .role-group-items {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+
+    /* Filas dentro de un grupo: fondo blanco para distinguirse claramente del contenedor del grupo */
+    .role-subcat-section.is-grouped .role-item-row {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        padding: 6px 8px;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.02);
+    }
+
+    .role-subcat-section.is-grouped .role-item-row:hover {
+        background: #f8fafc;
+        border-color: #cbd5e1;
+    }
+
+    /* Sección de elementos no agrupados */
+    .role-subcat-section.is-ungrouped {
+        margin-top: 6px;
+    }
+
+    .role-ungrouped-divider {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 10px 0 6px 0;
+        padding: 0 4px;
+        user-select: none;
+    }
+
+    .role-ungrouped-divider::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: #e2e8f0;
+    }
+
+    .role-ungrouped-divider-label {
+        font-size: 10px;
+        font-weight: 700;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .role-ungrouped-divider-count {
+        font-size: 9.5px;
+        font-weight: 600;
+        color: #94a3b8;
+        background: #f1f5f9;
+        border-radius: 9999px;
+        padding: 0 6px;
+    }
+
+    .role-group-items {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    /* Filas de Permiso / Rol */
+    .role-item-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 7px 10px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        background: transparent;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        user-select: none;
+    }
+
+    .role-item-row:hover {
+        background: #f8fafc;
+        border-color: #f1f5f9;
+    }
+
+    .role-item-check-wrap {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .role-checkbox-custom {
+        width: 18px !important;
+        height: 18px !important;
+        border-radius: 4px;
+        cursor: pointer;
+        accent-color: #2563eb;
+        margin: 0 !important;
+        vertical-align: middle;
+    }
+
+    .role-item-shield-icon {
+        font-size: 13.5px;
+        color: #94a3b8;
+        transition: color 0.15s ease;
+    }
+
+    .role-item-details {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .role-item-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: #334155;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .role-item-row.is-selected .role-item-label {
+        font-weight: 600;
+    }
+
+    .role-item-subtext {
+        font-size: 11px;
+        color: #94a3b8;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .role-empty-module {
+        font-size: 12px;
+        color: #94a3b8;
+        font-style: italic;
+        padding: 14px 6px;
+        text-align: center;
+    }
+
+    /* Modal Footer */
+    .role-modal-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-top: 16px;
+        border-top: 1px solid #f1f5f9;
+        margin-top: 6px;
+    }
+
+    .role-footer-count {
+        font-size: 12.5px;
+        color: #475569;
+    }
+
+    .role-footer-count strong {
+        color: #0f172a;
+        font-weight: 700;
+    }
+
+    .role-footer-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    /* Application Button Styles */
+    .role-footer-actions .btn {
+        border-radius: 3px !important;
+        font-weight: 500 !important;
+        font-size: 12px !important;
+        line-height: 1.5 !important;
+        padding: 6px 16px !important;
+        letter-spacing: 0.2px;
+    }
+</style>
+
+<div class="role-modal-container" id="roleModalRoot">
+    <form asp-action="_Assign" asp-controller="SecurityRoles" method="post" id="formAssignRoles">
+        <input type="hidden" name="userId" value="@user?.Id" />
+
+        <!-- Header -->
+        <div class="role-modal-header">
+            <div class="role-modal-header-left">
+                <div class="role-shield-badge">
+                    <i class="fa fa-shield"></i>
+                </div>
+                <div class="role-header-titles">
+                    <h3 class="role-header-title">Asignar Permisos y Roles Locales</h3>
+                    <p class="role-header-subtitle">Usuario: <strong>@userNameDisplay</strong> — @userEmailDisplay</p>
+                </div>
+            </div>
+            <button type="button" class="role-modal-close-btn" data-dismiss="modal" title="Cerrar">&times;</button>
         </div>
 
-        <div class="row">
-            <div class="col-xs-12">
-                @if (roles.Count == 0)
+        <!-- Toolbar: Módulos y Filtro -->
+        <div class="role-toolbar-row">
+            <div class="role-toolbar-title">
+                MÓDULOS Y PERMISOS DISPONIBLES (<span class="badge-count" id="lblRolesSeleccionadosCount">@assignedRoleIds.Count SELECCIONADOS</span>):
+            </div>
+            <div class="role-search-wrap">
+                <i class="fa fa-search"></i>
+                <input type="text" id="roleFilterInput" class="role-search-input" placeholder="Filtrar permisos..." oninput="filterRolesLive(this.value)">
+            </div>
+        </div>
+
+        <!-- Contenedor de 2 Columnas Balanceadas (Izquierda: Datos + Reportes + Sistema | Derecha: Gestión) -->
+        <div class="role-modules-columns">
+            <!-- Columna Izquierda: Datos, Reportes y Sistema -->
+            <div class="role-modules-col-left">
+                @foreach (var mod in leftModules)
                 {
-                    <div class="alert alert-warning">
-                        No hay roles habilitados en el sistema.
+                    <div class="role-module-card card-module-@mod.Key" id="card-module-@mod.Key">
+                        <div class="role-module-card-header">
+                            <div class="role-module-titles">
+                                <h5 class="role-module-name">@mod.Title</h5>
+                                <p class="role-module-desc">@mod.Description</p>
+                            </div>
+                            @if (mod.RoleItems.Any())
+                            {
+                                <button type="button" class="btn-card-toggle-all" data-module="@mod.Key" onclick="toggleSelectAllInModule('@mod.Key')">
+                                    Marcar todo
+                                </button>
+                            }
+                        </div>
+                        <div class="role-items-list" id="list-module-@mod.Key">
+                            @if (!mod.RoleItems.Any())
+                            {
+                                <div class="role-empty-module">
+                                    <i class="fa fa-info-circle"></i> Sin roles configurados en este módulo.
+                                </div>
+                            }
+                            else
+                            {
+                                var groupedSubcats = mod.RoleItems
+                                    .GroupBy(x => string.IsNullOrWhiteSpace(x.Subcategory) ? "" : x.Subcategory)
+                                    .OrderBy(g => string.IsNullOrEmpty(g.Key) ? "zzz" : (g.Key == "Cupones" ? "aaa" : g.Key))
+                                    .ToList();
+
+                                foreach (var grp in groupedSubcats)
+                                {
+                                    var hasGroupTitle = !string.IsNullOrWhiteSpace(grp.Key);
+                                    <div class="role-subcat-section @(hasGroupTitle ? "is-grouped" : "is-ungrouped")" data-subcat="@(hasGroupTitle ? grp.Key.ToLower() : "")">
+                                        @if (hasGroupTitle)
+                                        {
+                                            <div class="role-group-header">
+                                                <div class="role-group-title">
+                                                    <i class="fa fa-folder-open"></i> @grp.Key
+                                                </div>
+                                                <div class="role-group-header-right">
+                                                    <button type="button" class="btn-subgroup-toggle" onclick="toggleSelectSubgroup(this, event)">Marcar</button>
+                                                    <span class="role-group-count-badge">@grp.Count() @(grp.Count() == 1 ? "permiso" : "permisos")</span>
+                                                </div>
+                                            </div>
+                                        }
+                                        else if (groupedSubcats.Any(g => !string.IsNullOrEmpty(g.Key)))
+                                        {
+                                            <div class="role-ungrouped-divider">
+                                                <span class="role-ungrouped-divider-label">
+                                                    <i class="fa fa-th-list"></i> Otros Permisos Generales
+                                                </span>
+                                                <span class="role-ungrouped-divider-count">@grp.Count()</span>
+                                            </div>
+                                        }
+                                        <div class="role-group-items">
+                                            @foreach (var item in grp)
+                                            {
+                                                var role = item.Role;
+                                                var isChecked = assignedRoleIds.Contains(role.Id);
+                                                <div class="role-item-row @(isChecked ? "is-selected" : "")" data-role-text="@((role.ShowName ?? "") + " " + grp.Key + " " + (item.CleanDescription ?? "")).ToLower()" onclick="handleRoleItemRowClick(this, event)">
+                                                    <div class="role-item-check-wrap">
+                                                        <!input type="checkbox" name="selectedRoleIds" value="@role.Id" @(isChecked ? "checked=\"checked\"" : "") class="role-checkbox-custom" onclick="event.stopPropagation(); onRoleCheckboxToggled(this);" />
+                                                    </div>
+                                                    <div class="role-item-shield-icon">
+                                                        <i class="fa fa-shield"></i>
+                                                    </div>
+                                                    <div class="role-item-details">
+                                                        <span class="role-item-label">@role.ShowName</span>
+                                                        @if (!string.IsNullOrEmpty(item.CleanDescription))
+                                                        {
+                                                            <span class="role-item-subtext">@item.CleanDescription</span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            }
+                        </div>
                     </div>
                 }
-                else
+            </div>
+
+            <!-- Columna Derecha: Gestión -->
+            <div class="role-modules-col-right">
+                @foreach (var mod in rightModules)
                 {
-                    <div class="list-group">
-                        @foreach (var role in roles)
-                        {
-                            var isChecked = assignedRoleIds.Contains(role.Id) ? "checked" : "";
-                            <div class="list-group-item">
-                                <div class="checkbox" style="margin-top: 0; margin-bottom: 0;">
-                                    <label style="width: 100%; cursor: pointer;">
-                                        <input type="checkbox" name="selectedRoleIds" value="@role.Id" @isChecked />
-                                        <strong>@role.ShowName</strong>
-                                        @if (!string.IsNullOrEmpty(role.Description))
-                                        {
-                                            <span class="text-muted" style="display: block; font-size: 0.9em; margin-top: 4px;">@role.Description</span>
-                                        }
-                                    </label>
-                                </div>
+                    <div class="role-module-card card-module-@mod.Key" id="card-module-@mod.Key">
+                        <div class="role-module-card-header">
+                            <div class="role-module-titles">
+                                <h5 class="role-module-name">@mod.Title</h5>
+                                <p class="role-module-desc">@mod.Description</p>
                             </div>
-                        }
+                            @if (mod.RoleItems.Any())
+                            {
+                                <button type="button" class="btn-card-toggle-all" data-module="@mod.Key" onclick="toggleSelectAllInModule('@mod.Key')">
+                                    Marcar todo
+                                </button>
+                            }
+                        </div>
+                        <div class="role-items-list" id="list-module-@mod.Key">
+                            @if (!mod.RoleItems.Any())
+                            {
+                                <div class="role-empty-module">
+                                    <i class="fa fa-info-circle"></i> Sin roles configurados en este módulo.
+                                </div>
+                            }
+                            else
+                            {
+                                var groupedSubcats = mod.RoleItems
+                                    .GroupBy(x => string.IsNullOrWhiteSpace(x.Subcategory) ? "" : x.Subcategory)
+                                    .OrderBy(g => string.IsNullOrEmpty(g.Key) ? "zzz" : (g.Key == "Cupones" ? "aaa" : g.Key))
+                                    .ToList();
+
+                                foreach (var grp in groupedSubcats)
+                                {
+                                    var hasGroupTitle = !string.IsNullOrWhiteSpace(grp.Key);
+                                    <div class="role-subcat-section @(hasGroupTitle ? "is-grouped" : "is-ungrouped")" data-subcat="@(hasGroupTitle ? grp.Key.ToLower() : "")">
+                                        @if (hasGroupTitle)
+                                        {
+                                            <div class="role-group-header">
+                                                <div class="role-group-title">
+                                                    <i class="fa fa-folder-open"></i> @grp.Key
+                                                </div>
+                                                <div class="role-group-header-right">
+                                                    <button type="button" class="btn-subgroup-toggle" onclick="toggleSelectSubgroup(this, event)">Marcar</button>
+                                                    <span class="role-group-count-badge">@grp.Count() @(grp.Count() == 1 ? "permiso" : "permisos")</span>
+                                                </div>
+                                            </div>
+                                        }
+                                        else if (groupedSubcats.Any(g => !string.IsNullOrEmpty(g.Key)))
+                                        {
+                                            <div class="role-ungrouped-divider">
+                                                <span class="role-ungrouped-divider-label">
+                                                    <i class="fa fa-th-list"></i> Otros Permisos Generales
+                                                </span>
+                                                <span class="role-ungrouped-divider-count">@grp.Count()</span>
+                                            </div>
+                                        }
+                                        <div class="role-group-items">
+                                            @foreach (var item in grp)
+                                            {
+                                                var role = item.Role;
+                                                var isChecked = assignedRoleIds.Contains(role.Id);
+                                                <div class="role-item-row @(isChecked ? "is-selected" : "")" data-role-text="@((role.ShowName ?? "") + " " + grp.Key + " " + (item.CleanDescription ?? "")).ToLower()" onclick="handleRoleItemRowClick(this, event)">
+                                                    <div class="role-item-check-wrap">
+                                                        <!input type="checkbox" name="selectedRoleIds" value="@role.Id" @(isChecked ? "checked=\"checked\"" : "") class="role-checkbox-custom" onclick="event.stopPropagation(); onRoleCheckboxToggled(this);" />
+                                                    </div>
+                                                    <div class="role-item-shield-icon">
+                                                        <i class="fa fa-shield"></i>
+                                                    </div>
+                                                    <div class="role-item-details">
+                                                        <span class="role-item-label">@role.ShowName</span>
+                                                        @if (!string.IsNullOrEmpty(item.CleanDescription))
+                                                        {
+                                                            <span class="role-item-subtext">@item.CleanDescription</span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            }
+                        </div>
                     </div>
                 }
             </div>
         </div>
+
+        <!-- Footer -->
+        <div class="role-modal-footer">
+            <div class="role-footer-count">
+                <strong id="lblRolesFooterCount">@assignedRoleIds.Count</strong> rol(es) marcado(s) actualmente
+            </div>
+            <div class="role-footer-actions">
+                <button type="button" class="btn btn-default btn-sm" data-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary btn-sm">Guardar Cambios</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+    $(function () {
+        // Asegurar que todos los items con clase is-selected tengan su checkbox marcado
+        $('#roleModalRoot .role-item-row.is-selected input.role-checkbox-custom').prop('checked', true);
+        
+        // Sincronizar clases is-selected si el checkbox vino checked del HTML
+        $('#roleModalRoot input.role-checkbox-custom:checked').closest('.role-item-row').addClass('is-selected');
+
+        // Ocultar modal-header y modal-footer genéricos del contenedor padre si existen
+        var $modal = $('#roleModalRoot').closest('.modal');
+        if ($modal.length > 0) {
+            $modal.find('.modal-header').hide();
+            $modal.find('.modal-footer').hide();
+            $modal.find('.modal-dialog').addClass('modal-lg').css({
+                'max-width': '980px',
+                'width': '94%',
+                'margin': '25px auto'
+            });
+            $modal.find('.modal-body').css({
+                'padding': '22px 26px',
+                'background': '#ffffff',
+                'border-radius': '14px',
+                'max-height': '88vh',
+                'overflow-y': 'auto'
+            });
+            $modal.find('.modal-content').css({
+                'border-radius': '14px',
+                'border': '1px solid #e2e8f0',
+                'box-shadow': '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                'overflow': 'hidden'
+            });
+        }
+
+        updateAllSubgroupButtonStates();
+        updateAllCardButtonStates();
+        updateSelectedCounter();
+
+        // Envío AJAX del formulario de asignación de roles sin recargar la página completa
+        $('#formAssignRoles').off('submit').on('submit', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.stopImmediatePropagation) {
+                e.stopImmediatePropagation();
+            }
+
+            var $form = $(this);
+            if ($form.data('submitting')) {
+                return false;
+            }
+            $form.data('submitting', true);
+
+            var $btnSubmit = $form.find('button[type="submit"]');
+            var originalBtnHtml = $btnSubmit.html();
+            $btnSubmit.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Guardando...');
+
+            $.ajax({
+                url: $form.attr('action') || '/SecurityRoles/_Assign',
+                type: 'POST',
+                data: $form.serialize(),
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                success: function (res) {
+                    $form.data('submitting', false);
+                    $btnSubmit.prop('disabled', false).html(originalBtnHtml);
+                    if (res && res.success) {
+                        var $modal = $form.closest('.modal');
+                        if ($modal.length) {
+                            $modal.modal('hide');
+                        } else {
+                            $('.modal').modal('hide');
+                        }
+
+                        if (typeof userRolesMap !== 'undefined' && res.userId) {
+                            userRolesMap[res.userId] = res.roleNames || [];
+                        }
+
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                toast: true,
+                                position: 'top-end',
+                                icon: 'success',
+                                title: res.message || 'Roles actualizados correctamente',
+                                showConfirmButton: false,
+                                timer: 3000
+                            });
+                        }
+
+                        if (typeof $ !== 'undefined' && $.fn && $.fn.dataTable) {
+                            var dt = $('#usersTable').DataTable();
+                            if (dt) {
+                                dt.ajax.reload(null, false);
+                            }
+                        }
+                    } else {
+                        var msg = (res && res.message) ? res.message : 'Error al guardar los roles';
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire('Error', msg, 'error');
+                        } else {
+                            alert(msg);
+                        }
+                    }
+                },
+                error: function (xhr) {
+                    $form.data('submitting', false);
+                    $btnSubmit.prop('disabled', false).html(originalBtnHtml);
+                    var errMsg = 'Error de conexión al procesar la solicitud.';
+                    if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
+                        errMsg = xhr.responseJSON.message;
+                    }
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire('Error', errMsg, 'error');
+                    } else {
+                        alert(errMsg);
+                    }
+                }
+            });
+        });
+    });
+
+    // Click en la fila completa del rol
+    function handleRoleItemRowClick(rowElem, evt) {
+        if ($(evt.target).is('input[type="checkbox"]')) return;
+        var $chk = $(rowElem).find('input.role-checkbox-custom');
+        $chk.prop('checked', !$chk.prop('checked'));
+        onRoleCheckboxToggled($chk[0]);
     }
-    @using (Html.BoxFooter())
-    {
-        <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
-        <button type="submit" class="btn btn-primary pull-right">Guardar Cambios</button>
+
+    // Cambio en checkbox de rol
+    function onRoleCheckboxToggled(chkElem) {
+        var $chk = $(chkElem);
+        var $row = $chk.closest('.role-item-row');
+        if ($chk.is(':checked')) {
+            $row.addClass('is-selected');
+        } else {
+            $row.removeClass('is-selected');
+        }
+
+        updateSubgroupButtonState($row.closest('.role-subcat-section'));
+        var $card = $chk.closest('.role-module-card');
+        updateCardButtonState($card);
+        updateSelectedCounter();
     }
-</form>
+
+    // Marcar / Desmarcar todos los roles de un subgrupo específico
+    function toggleSelectSubgroup(btn, event) {
+        event.stopPropagation();
+        var $sec = $(btn).closest('.role-subcat-section');
+        var $checkboxes = $sec.find('.role-item-row:visible input.role-checkbox-custom');
+        if ($checkboxes.length === 0) return;
+
+        var checkedCount = $checkboxes.filter(':checked').length;
+        var newCheckedState = (checkedCount !== $checkboxes.length);
+
+        $checkboxes.prop('checked', newCheckedState);
+        $sec.find('.role-item-row:visible').each(function () {
+            $(this).toggleClass('is-selected', newCheckedState);
+        });
+
+        updateSubgroupButtonState($sec);
+        updateCardButtonState($sec.closest('.role-module-card'));
+        updateSelectedCounter();
+    }
+
+    function updateSubgroupButtonState($sec) {
+        if (!$sec || !$sec.hasClass('is-grouped')) return;
+        var $btn = $sec.find('.btn-subgroup-toggle');
+        if ($btn.length === 0) return;
+        var $checkboxes = $sec.find('.role-item-row:visible input.role-checkbox-custom');
+        if ($checkboxes.length === 0) return;
+        var checkedCount = $checkboxes.filter(':checked').length;
+        if (checkedCount === $checkboxes.length) {
+            $btn.text('Desmarcar');
+        } else {
+            $btn.text('Marcar');
+        }
+    }
+
+    function updateAllSubgroupButtonStates() {
+        $('.role-subcat-section.is-grouped').each(function () {
+            updateSubgroupButtonState($(this));
+        });
+    }
+
+    // Botón "Marcar todo / Desmarcar todo" de cada tarjeta
+    function toggleSelectAllInModule(moduleKey) {
+        var $card = $('#card-module-' + moduleKey);
+        var $visibleRows = $card.find('.role-item-row:visible');
+        if ($visibleRows.length === 0) return;
+
+        var allChecked = true;
+        $visibleRows.each(function () {
+            if (!$(this).find('input.role-checkbox-custom').is(':checked')) {
+                allChecked = false;
+                return false;
+            }
+        });
+
+        var newCheckedState = !allChecked;
+        $visibleRows.each(function () {
+            var $row = $(this);
+            var $chk = $row.find('input.role-checkbox-custom');
+            $chk.prop('checked', newCheckedState);
+            if (newCheckedState) {
+                $row.addClass('is-selected');
+            } else {
+                $row.removeClass('is-selected');
+            }
+        });
+
+        $card.find('.role-subcat-section.is-grouped').each(function () {
+            updateSubgroupButtonState($(this));
+        });
+
+        updateCardButtonState($card);
+        updateSelectedCounter();
+    }
+
+    // Actualiza el texto del botón Marcar/Desmarcar de una tarjeta
+    function updateCardButtonState($card) {
+        var $btn = $card.find('.btn-card-toggle-all');
+        if ($btn.length === 0) return;
+
+        var $checkboxes = $card.find('.role-item-row:visible input.role-checkbox-custom');
+        if ($checkboxes.length === 0) {
+            $btn.text('Marcar todo');
+            return;
+        }
+
+        var checkedCount = $checkboxes.filter(':checked').length;
+        if (checkedCount === $checkboxes.length) {
+            $btn.text('Desmarcar todo');
+        } else {
+            $btn.text('Marcar todo');
+        }
+    }
+
+    function updateAllCardButtonStates() {
+        $('.role-module-card').each(function () {
+            updateCardButtonState($(this));
+        });
+    }
+
+    // Actualiza los contadores en toolbar y footer
+    function updateSelectedCounter() {
+        var totalSelected = $('#roleModalRoot input.role-checkbox-custom:checked').length;
+        $('#lblRolesSeleccionadosCount').text(totalSelected + ' SELECCIONADOS');
+        $('#lblRolesFooterCount').text(totalSelected);
+    }
+
+    // Filtro de búsqueda en vivo
+    function filterRolesLive(query) {
+        var q = (query || '').trim().toLowerCase();
+
+        $('.role-module-card').each(function () {
+            var $card = $(this);
+            var $sections = $card.find('.role-subcat-section');
+            var cardMatches = 0;
+
+            $sections.each(function () {
+                var $sec = $(this);
+                var $rows = $sec.find('.role-item-row');
+                var matchedInGroup = 0;
+
+                $rows.each(function () {
+                    var $row = $(this);
+                    var text = $row.data('role-text') || '';
+                    if (!q || text.indexOf(q) !== -1) {
+                        $row.show();
+                        matchedInGroup++;
+                    } else {
+                        $row.hide();
+                    }
+                });
+
+                if (!q || matchedInGroup > 0) {
+                    $sec.show();
+                    updateSubgroupButtonState($sec);
+                    cardMatches += matchedInGroup;
+                } else {
+                    $sec.hide();
+                }
+            });
+
+            if (!q || cardMatches > 0) {
+                $card.show();
+            } else {
+                $card.hide();
+            }
+
+            updateCardButtonState($card);
+        });
+    }
+</script>

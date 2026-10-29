@@ -1,4 +1,4 @@
-using Castle.Core.Internal;
+﻿using Castle.Core.Internal;
 using Commons.Extensions;
 using Commons.Helpers;
 using Commons.Identity.Extensions;
@@ -20,6 +20,35 @@ namespace EstanciasCore.Controllers.ViewComponents.Layout
         {
             _context = context;
         }
+        private bool UserHasAnyRoute(params string[] routes)
+        {
+            if (routes == null || routes.Length == 0) return false;
+            foreach (var r in routes)
+            {
+                if (string.IsNullOrEmpty(r)) continue;
+                if (HttpContext.UserHasRoute(r)) return true;
+
+                if (!r.StartsWith("/Core/", StringComparison.OrdinalIgnoreCase) &&
+                    !r.StartsWith("/Administracion/", StringComparison.OrdinalIgnoreCase) &&
+                    !r.StartsWith("/Reportes/", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (HttpContext.UserHasRoute("/Core" + (r.StartsWith("/") ? r : "/" + r))) return true;
+                    if (HttpContext.UserHasRoute("/Administracion" + (r.StartsWith("/") ? r : "/" + r))) return true;
+                    if (HttpContext.UserHasRoute("/Reportes" + (r.StartsWith("/") ? r : "/" + r))) return true;
+                }
+                else
+                {
+                    var slashIdx = r.IndexOf('/', 1);
+                    if (slashIdx > 0)
+                    {
+                        var withoutArea = r.Substring(slashIdx);
+                        if (HttpContext.UserHasRoute(withoutArea)) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
         public IViewComponentResult Invoke(string filter)
         {
 
@@ -141,220 +170,213 @@ namespace EstanciasCore.Controllers.ViewComponents.Layout
             }
             else
             {
-                notificaciones.TreeChild = new List<SidebarMenu>()
-                {
-                    MenuHelpers.AddModule("Notificación", "/Core/Notificaciones/"),
-                    MenuHelpers.AddModule("Plantillas", "/Core/NotificacionesPlantillas/"),
-                    MenuHelpers.AddModule("Lista de Distribución", "/Core/ListaDistribucion/")
-                };
-
                 datos.TreeChild = new List<SidebarMenu>();
+                generales.TreeChild = new List<SidebarMenu>();
+                especificos.TreeChild = new List<SidebarMenu>();
 
-
-                if (HttpContext.UserHasRoute("/Core/TiposDocumentos/Index"))
+                #region DATOS GENERALES
+                if (UserHasAnyRoute("/Core/TiposDocumentos/Index", "/TiposDocumentos/Index"))
                     generales.TreeChild.Add(MenuHelpers.AddModule("Tipos de Documento", "/Core/TiposDocumentos/"));
 
-                if (HttpContext.UserHasRoute("/DestinosFondos/Index"))
+                if (UserHasAnyRoute("/Core/DestinosFondos/Index", "/DestinosFondos/Index"))
                     generales.TreeChild.Add(MenuHelpers.AddModule("Destinos Fondos", "/Core/DestinosFondos"));
 
-                if (HttpContext.UserHasRoute("/Sucursales/Index"))
+                if (UserHasAnyRoute("/Core/Sucursales/Index", "/Sucursales/Index"))
                     generales.TreeChild.Add(MenuHelpers.AddModule("Sucursales", "/Core/Sucursales"));
 
-                if (HttpContext.UserHasRoute("/Monedas/Index"))
+                if (UserHasAnyRoute("/Core/Monedas/Index", "/Monedas/Index"))
                     generales.TreeChild.Add(MenuHelpers.AddModule("Monedas", "/Core/Monedas"));
 
-                if (HttpContext.UserHasRoute("/Paises/Index"))
+                if (UserHasAnyRoute("/Core/Paises/Index", "/Paises/Index"))
                     generales.TreeChild.Add(MenuHelpers.AddModule("Paises", "/Core/Paises"));
 
-                if (HttpContext.UserHasRoute("/Provincias/Index"))
+                if (UserHasAnyRoute("/Core/Provincias/Index", "/Provincias/Index"))
                     generales.TreeChild.Add(MenuHelpers.AddModule("Provincias", "/Core/Provincias/"));
 
-                if (HttpContext.UserHasRoute("/Localidad/Index"))
+                if (UserHasAnyRoute("/Core/Localidad/Index", "/Localidad/Index"))
                     generales.TreeChild.Add(MenuHelpers.AddModule("Localidad", "/Core/Localidad/"));
 
-                if (HttpContext.UserHasRoute("/Core/TiposClientes/Index"))
+                if (UserHasAnyRoute("/Core/TiposClientes/Index", "/TiposClientes/Index"))
                     generales.TreeChild.Add(MenuHelpers.AddModule("Tipos de Clientes", "/Core/TiposClientes/"));
 
-                if (HttpContext.UserHasRoute("/Core/Grupos/Index"))
+                if (UserHasAnyRoute("/Core/Grupos/Index", "/Grupos/Index"))
                     generales.TreeChild.Add(MenuHelpers.AddModule("Grupos", "/Core/Grupos/"));
 
-                if (HttpContext.UserHasRoute("/Empresas/Index"))
+                if (UserHasAnyRoute("/Core/Empresas/Index", "/Empresas/Index"))
                     generales.TreeChild.Add(MenuHelpers.AddModule("Empresas", "/Core/Empresas/"));
 
-                if (HttpContext.UserHasRoute("/LineasPrestamos/Index"))
+                if (UserHasAnyRoute("/Core/LineasPrestamos/Index", "/LineasPrestamos/Index"))
                     generales.TreeChild.Add(MenuHelpers.AddModule("Lineas de Prestamos", "/Core/LineasPrestamos/"));
 
-                if (HttpContext.UserHasRoute("/Core/Conceptos/Index"))
+                if (UserHasAnyRoute("/Core/Conceptos/Index", "/Conceptos/Index"))
                     generales.TreeChild.Add(MenuHelpers.AddModule("Conceptos", "/Core/Conceptos/"));
 
-                if (HttpContext.UserHasRoute("/Core/CuentasCorrientes/Index"))
+                if (UserHasAnyRoute("/Core/CuentasCorrientes/Index", "/CuentasCorrientes/Index"))
                     generales.TreeChild.Add(MenuHelpers.AddModule("Cuentas Corrientes", "/Core/CuentasCorrientes/"));
 
-                if (HttpContext.UserHasRoute("/Core/TipoMovimientoBilletera/Index"))
+                if (UserHasAnyRoute("/Core/TipoMovimientoBilletera/Index", "/TipoMovimientoBilletera/Index"))
                     generales.TreeChild.Add(MenuHelpers.AddModule("Tipos Movimientos Billetera", "/Core/TipoMovimientoBilletera/"));
 
-                if (HttpContext.UserHasRoute("/MovimientoBilletera/Index"))
+                if (UserHasAnyRoute("/Core/MovimientoBilletera/Index", "/MovimientoBilletera/Index"))
                     generales.TreeChild.Add(MenuHelpers.AddModule("Movimientos de Billetera", "/Core/MovimientoBilletera/"));
 
-                if (HttpContext.UserHasRoute("/Billetera/Index"))
+                if (UserHasAnyRoute("/Core/Billetera/Index", "/Billetera/Index"))
                     generales.TreeChild.Add(MenuHelpers.AddModule("Billetera", "/Core/Billetera/"));
 
-                if (HttpContext.UserHasRoute("/Core/LeyendaTipoMovimiento/Index"))
+                if (UserHasAnyRoute("/Core/LeyendaTipoMovimiento/Index", "/LeyendaTipoMovimiento/Index"))
                     generales.TreeChild.Add(MenuHelpers.AddModule("Leyendas", "/Core/LeyendaTipoMovimiento/"));
-               
+
+                if (UserHasAnyRoute("/Core/UsuarioCategorias/Index", "/UsuarioCategorias/Index"))
+                    generales.TreeChild.Add(MenuHelpers.AddModule("Categoria de Usuarios", "/Core/UsuarioCategorias"));
 
                 if (generales.TreeChild.Count != 0)
                     datos.TreeChild.Add(generales);
+                #endregion
 
-                //////////////////////////////////////////////
-                ///////////       Especificos         ////////////
-                //////////////////////////////////////////////
-                #region ESPECIFICOS
-
-                //ESPECIFICOS:
-
-                especificos.TreeChild = new List<SidebarMenu>();
-
-                //if (HttpContext.UserHasRoute("/Core/Probabilidades/Index"))
-                //    especificos.TreeChild.Add(MenuHelpers.AddModule("Matriz - Probabilidades", "/Core/Probabilidades/"));
-
-                //if (HttpContext.UserHasRoute("/Core/Consecuencias/Index"))
-                //    especificos.TreeChild.Add(MenuHelpers.AddModule("Matriz - Consecuencias", "/Core/Consecuencias/"));
-
-                if (HttpContext.UserHasRoute("/Core/Rubro/Index"))
+                #region DATOS ESPECIFICOS
+                if (UserHasAnyRoute("/Core/Rubro/Index", "/Rubro/Index"))
                     especificos.TreeChild.Add(MenuHelpers.AddModule("Proveedor - Rubros", "/Core/Rubro/"));
 
-                if (HttpContext.UserHasRoute("/Core/Marcas/Index"))
+                if (UserHasAnyRoute("/Core/Marcas/Index", "/Marcas/Index"))
                     especificos.TreeChild.Add(MenuHelpers.AddModule("Marcas", "/Core/Marcas/"));
-
 
                 if (especificos.TreeChild.Count != 0)
                     datos.TreeChild.Add(especificos);
-
 
                 if (datos.TreeChild.Count != 0)
                     sidebars.Add(datos);
                 #endregion
 
-
-
-                //////////////////////////////////////////////
-                ///////////       Gestion         ////////////
-                //////////////////////////////////////////////
                 #region GESTION
-
-                //GESTIÓN: especificos
-
                 gestion.TreeChild = new List<SidebarMenu>();
 
-                if (HttpContext.UserHasRoute("/Clientes/Index"))
+                if (UserHasAnyRoute("/Core/Clientes/Index", "/Clientes/Index"))
                     gestion.TreeChild.Add(MenuHelpers.AddModule("Clientes", "/Core/Clientes"));
 
-				if (HttpContext.UserHasRoute("/PagoTarjeta/Index"))
-					gestion.TreeChild.Add(MenuHelpers.AddModule("Pagos Tarjeta", "/Core/PagoTarjeta"));
+                if (UserHasAnyRoute("/Core/PagoTarjeta/Index", "/PagoTarjeta/Index"))
+                    gestion.TreeChild.Add(MenuHelpers.AddModule("Pagos Tarjeta", "/Core/PagoTarjeta"));
 
-				if (HttpContext.UserHasRoute("/PagoTarjeta/Index"))
-					gestion.TreeChild.Add(MenuHelpers.AddModule("Histórico de Pagos Tarjeta", "/Core/PagoTarjetaHistorico"));
+                if (UserHasAnyRoute("/Core/PagoTarjetaHistorico/Index", "/PagoTarjetaHistorico/Index"))
+                    gestion.TreeChild.Add(MenuHelpers.AddModule("Histórico de Pagos Tarjeta", "/Core/PagoTarjetaHistorico"));
 
-				if (HttpContext.UserHasRoute("/Vendedores/Index"))
+                #region NOTIFICACIONES
+                notificaciones.TreeChild = new List<SidebarMenu>();
+
+                if (UserHasAnyRoute("/Core/Notificaciones/Index", "/Notificaciones/Index"))
+                    notificaciones.TreeChild.Add(MenuHelpers.AddModule("Notificación", "/Core/Notificaciones/"));
+
+                if (UserHasAnyRoute("/Core/NotificacionesPlantillas/Index", "/NotificacionesPlantillas/Index"))
+                    notificaciones.TreeChild.Add(MenuHelpers.AddModule("Plantillas", "/Core/NotificacionesPlantillas/"));
+
+                if (UserHasAnyRoute("/Core/ListaDistribucion/Index", "/ListaDistribucion/Index"))
+                    notificaciones.TreeChild.Add(MenuHelpers.AddModule("Lista de Distribución", "/Core/ListaDistribucion/"));
+
+                if (notificaciones.TreeChild.Count != 0)
+                    gestion.TreeChild.Add(notificaciones);
+                #endregion
+
+                #region PUNTOS Y CUPONES
+                puntosycupones.TreeChild = new List<SidebarMenu>();
+
+                if (UserHasAnyRoute("/Core/Cupon/Validar", "/Core/Cupon/Index", "/Cupon/Validar", "/Cupon/Index"))
+                    puntosycupones.TreeChild.Add(MenuHelpers.AddModule("Validar Cupón", "/Core/Cupon"));
+
+                if (UserHasAnyRoute("/Core/Premios/Index", "/Core/Premio/Index", "/Premios/Index", "/Premio/Index"))
+                    puntosycupones.TreeChild.Add(MenuHelpers.AddModule("Cupones", "/Core/Premios"));
+
+                if (UserHasAnyRoute("/Core/PuntosObtenidosClientes/Index", "/PuntosObtenidosClientes/Index"))
+                    puntosycupones.TreeChild.Add(MenuHelpers.AddModule("Puntos Clientes", "/Core/PuntosObtenidosClientes"));
+
+                if (UserHasAnyRoute("/Core/Categorias/Index", "/Categorias/Index"))
+                    puntosycupones.TreeChild.Add(MenuHelpers.AddModule("Categorias de Cupones", "/Core/Categorias"));
+
+                if (UserHasAnyRoute("/Core/RelacionPuntos/Index", "/RelacionPuntos/Index"))
+                    puntosycupones.TreeChild.Add(MenuHelpers.AddModule("Relación Puntos", "/Core/RelacionPuntos/"));
+
+                if (puntosycupones.TreeChild.Count != 0)
+                    gestion.TreeChild.Add(puntosycupones);
+                #endregion
+
+                if (UserHasAnyRoute("/Core/Vendedores/Index", "/Vendedores/Index"))
                     gestion.TreeChild.Add(MenuHelpers.AddModule("Vendedores", "/Core/Vendedores/"));
 
-                if (HttpContext.UserHasRoute("/Novedades/Index"))
+                if (UserHasAnyRoute("/Core/Novedades/Index", "/Novedades/Index"))
                     gestion.TreeChild.Add(MenuHelpers.AddModule("Novedades", "/Core/Novedades"));
 
-                if (HttpContext.UserHasRoute("/Notificaciones/Index"))
-                    gestion.TreeChild.Add(notificaciones);
-
-                if (HttpContext.UserHasRoute("/Core/Cupon/Validar")){
-                    puntosycupones.TreeChild = new List<SidebarMenu>() {
-                        MenuHelpers.AddModule("Validar Cupón", "/Core/Cupon")
-                    };
-
-                    if(HttpContext.UserHasRoute("/Core/Premio/Index"))
-                    {
-                        puntosycupones.TreeChild.Add(MenuHelpers.AddModule("Cupones", "/Core/Premios"));
-                        puntosycupones.TreeChild.Add(MenuHelpers.AddModule("Puntos Clientes", "/Core/PuntosObtenidosClientes"));
-                        puntosycupones.TreeChild.Add(MenuHelpers.AddModule("Categorias de Cupones", "/Core/Categorias"));
-                        puntosycupones.TreeChild.Add(MenuHelpers.AddModule("Relación Puntos", "/Core/RelacionPuntos/"));                       
-                    };
-
-                    gestion.TreeChild.Add(puntosycupones);
-
-                }
-
-                if (HttpContext.UserHasRoute("/Promociones/Index"))
+                if (UserHasAnyRoute("/Core/Promociones/Index", "/Promociones/Index"))
                     gestion.TreeChild.Add(MenuHelpers.AddModule("Promociones", "/Core/Promociones"));
 
-				if (HttpContext.UserHasRoute("/Banners/Index"))
-					gestion.TreeChild.Add(MenuHelpers.AddModule("Banners", "/Core/Banners"));
+                if (UserHasAnyRoute("/Core/Banners/Index", "/Banners/Index"))
+                    gestion.TreeChild.Add(MenuHelpers.AddModule("Banners", "/Core/Banners"));
 
-				if (HttpContext.UserHasRoute("/Core/Proveedor/Index"))
+                if (UserHasAnyRoute("/Core/Proveedor/Index", "/Proveedor/Index"))
                     gestion.TreeChild.Add(MenuHelpers.AddModule("Proveedor", "/Core/Proveedor"));
 
-				if (HttpContext.UserHasRoute("/ImagenIntro/Index"))
+                if (UserHasAnyRoute("/Core/ImagenIntro/Index", "/ImagenIntro/Index"))
                     gestion.TreeChild.Add(MenuHelpers.AddModule("Imagen de Intro", "/Core/ImagenIntro"));
 
-				if (HttpContext.UserHasRoute("/Catalogo/Index"))
+                if (UserHasAnyRoute("/Core/Catalogo/Index", "/Catalogo/Index"))
                     gestion.TreeChild.Add(MenuHelpers.AddModule("Catálogo", "/Core/Catalogo"));
 
-                
+                if (UserHasAnyRoute("/Core/MenuMobile/Index", "/MenuMobile/Index"))
+                    gestion.TreeChild.Add(MenuHelpers.AddModule("Menú Mobile", "/Core/MenuMobile/"));
 
-                //if (HttpContext.UserHasRoute("/Core/Prestamos/Index"))
-                //    gestion.TreeChild.Add(MenuHelpers.AddModule("Prestamos", "/Core/Prestamos"));
+                if (UserHasAnyRoute("/Core/PreRegistroCategorias/Index", "/PreRegistroCategorias/Index"))
+                    gestion.TreeChild.Add(MenuHelpers.AddModule("PreRegistro de Categoria", "/Core/PreRegistroCategorias"));
 
+                if (UserHasAnyRoute("/Core/Morosos/Index", "/Morosos/Index"))
+                    gestion.TreeChild.Add(MenuHelpers.AddModule("Morosos", "/Core/Morosos"));
 
-                //if (HttpContext.UserHasRoute("/Core/BandejaDeAprobacion/Index"))
-                //    gestion.TreeChild.Add(MenuHelpers.AddModule("Bandeja De Aprobación", "/Core/BandejaDeAprobacion"));
+                if (UserHasAnyRoute("/Core/SolicitudDeTarjeta/Index", "/SolicitudDeTarjeta/Index"))
+                    gestion.TreeChild.Add(MenuHelpers.AddModule("Solicitudes de Tarjeta", "/Core/SolicitudDeTarjeta"));
+
+                if (UserHasAnyRoute("/Core/MovimientoTarjeta/Index", "/MovimientoTarjeta/Index"))
+                    gestion.TreeChild.Add(MenuHelpers.AddModule("Movimientos Tarjeta (LOAN)", "/Core/MovimientoTarjeta"));
 
                 if (gestion.TreeChild.Count != 0)
                     sidebars.Add(gestion);
-
                 #endregion
 
-
-                //////////////////////////////////////////////
-                ///////////         REPORTES       ////////////
-                //////////////////////////////////////////////
                 #region REPORTES
+                reportes.TreeChild = new List<SidebarMenu>();
 
-                //reportes.TreeChild = new List<SidebarMenu>();
+                if (UserHasAnyRoute("/Reportes/PagoTarjetaReportes/Index", "/PagoTarjetaReportes/Index"))
+                    reportes.TreeChild.Add(MenuHelpers.AddModule("Pagos Tarjeta", "/Reportes/PagoTarjetaReportes/"));
 
-                //if (HttpContext.UserHasRoute("/PrestamosApp/Index"))
-                //    reportes.TreeChild.Add(MenuHelpers.AddModule("Prestamos por App Estancias", "/Core/PrestamosApp/"));
-                //if (reportes.TreeChild.Count != 0)
-                //    sidebars.Add(reportes);
+                if (UserHasAnyRoute("/Reportes/ClientesReportes/Index", "/ClientesReportes/Index"))
+                    reportes.TreeChild.Add(MenuHelpers.AddModule("Clientes", "/Reportes/ClientesReportes/"));
 
+                if (UserHasAnyRoute("/Reportes/ResumenTarjetaReportes/Index", "/ResumenTarjetaReportes/Index"))
+                    reportes.TreeChild.Add(MenuHelpers.AddModule("Resumen Tarjeta", "/Reportes/ResumenTarjetaReportes/"));
+
+                if (UserHasAnyRoute("/Reportes/CuponesReportes/Index", "/CuponesReportes/Index"))
+                    reportes.TreeChild.Add(MenuHelpers.AddModule("Cupones", "/Reportes/CuponesReportes/"));
+
+                if (reportes.TreeChild.Count != 0)
+                    sidebars.Add(reportes);
                 #endregion
 
-
-                //////////////////////////////////////////////
-                ///////////        SISTEMA        ////////////
-                //////////////////////////////////////////////
                 #region SISTEMA
-
                 sistema.TreeChild = new List<SidebarMenu>();
-                // Sistema: Usuarios
-                if (HttpContext.UserHasRoute("/Usuarios/Index"))
+
+                if (UserHasAnyRoute("/Administracion/Usuarios/Index", "/Usuarios/Index"))
                     sistema.TreeChild.Add(MenuHelpers.AddModule("Usuarios", "/Administracion/Usuarios", "fa fa-users text-red", new Tuple<int, int, int>(0, 0, 0)));
-                //Sistema: Funciones
-                if (HttpContext.UserHasRoute("/Securityfunctions/Index"))
+
+                if (UserHasAnyRoute("/SecurityFunctions/Index", "/Securityfunctions/Index"))
                     sistema.TreeChild.Add(MenuHelpers.AddModule("Funciones", "/SecurityFunctions", "fa fa-key text-red", new Tuple<int, int, int>(0, 0, 0)));
-                // Sistema: SecurityRoles
-                if (HttpContext.UserHasRoute("/SecurityRoles/Index"))
+
+                if (UserHasAnyRoute("/SecurityRoles/Index"))
                     sistema.TreeChild.Add(MenuHelpers.AddModule("Roles", "/SecurityRoles", "fa fa-key text-red", new Tuple<int, int, int>(0, 0, 0)));
 
-                if (!sistema.TreeChild.IsNullOrEmpty()) sidebars.Add(sistema);
+                if (!sistema.TreeChild.IsNullOrEmpty())
+                    sidebars.Add(sistema);
                 #endregion
-                //////////////////////////////////////////////
-                ///////////        SESION         ////////////
-                //////////////////////////////////////////////
+
                 #region SESION
-
-                sesion.TreeChild = new List<SidebarMenu>();
-
-                // Sesión: Logout
-                sesion.TreeChild.Add(MenuHelpers.AddModule("Cierra Sesion", "javascript:document.getElementById('logoutForm').submit()", "fa fa-sign-out"));
-
+                sesion.TreeChild = new List<SidebarMenu>()
+                {
+                    MenuHelpers.AddModule("Cierra Sesión", "javascript:document.getElementById('logoutForm').submit()", "fa fa-sign-out")
+                };
                 sidebars.Add(sesion);
                 #endregion
             }

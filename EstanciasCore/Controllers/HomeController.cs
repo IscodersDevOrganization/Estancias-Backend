@@ -1,4 +1,4 @@
-using Commons.Extensions;
+﻿using Commons.Extensions;
 using Commons.Identity.Extensions;
 using Commons.Identity.Services;
 using DAL.Data;
@@ -58,10 +58,35 @@ namespace EstanciasCore.Controllers
             return View();
         }
 
-        private bool TienePermisoModulo(bool isAdmin, string rutaAcceso)
+        private bool TienePermisoModulo(bool isAdmin, params string[] rutasAcceso)
         {
             if (isAdmin) return true;
-            return HttpContext.UserHasRoute(rutaAcceso);
+            if (rutasAcceso == null || rutasAcceso.Length == 0) return false;
+
+            foreach (var ruta in rutasAcceso)
+            {
+                if (string.IsNullOrEmpty(ruta)) continue;
+                if (HttpContext.UserHasRoute(ruta)) return true;
+
+                if (!ruta.StartsWith("/Core/", StringComparison.OrdinalIgnoreCase) && 
+                    !ruta.StartsWith("/Administracion/", StringComparison.OrdinalIgnoreCase) && 
+                    !ruta.StartsWith("/Reportes/", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (HttpContext.UserHasRoute("/Core" + (ruta.StartsWith("/") ? ruta : "/" + ruta))) return true;
+                    if (HttpContext.UserHasRoute("/Administracion" + (ruta.StartsWith("/") ? ruta : "/" + ruta))) return true;
+                    if (HttpContext.UserHasRoute("/Reportes" + (ruta.StartsWith("/") ? ruta : "/" + ruta))) return true;
+                }
+                else
+                {
+                    var slashIdx = ruta.IndexOf('/', 1);
+                    if (slashIdx > 0)
+                    {
+                        var withoutArea = ruta.Substring(slashIdx);
+                        if (HttpContext.UserHasRoute(withoutArea)) return true;
+                    }
+                }
+            }
+            return false;
         }
 
         [HttpGet]
@@ -70,10 +95,10 @@ namespace EstanciasCore.Controllers
             var rolesusuario = _context.Users.FirstOrDefault(x => x.UserName == User.Identity.Name);
             bool isAdmin = ((ClaimsPrincipal)User).IsAdmin() || (rolesusuario != null && rolesusuario.Administradores == true);
 
-            bool puedeVerClientes = TienePermisoModulo(isAdmin, "/Clientes/Index");
-            bool puedeVerPagos = TienePermisoModulo(isAdmin, "/PagoTarjeta/Index");
-            bool puedeVerSolicitudes = TienePermisoModulo(isAdmin, "/Core/SolicitudDeTarjeta/Index") || TienePermisoModulo(isAdmin, "/SolicitudDeTarjeta/Index");
-            bool puedeVerMorosos = TienePermisoModulo(isAdmin, "/Core/Morosos/Index") || TienePermisoModulo(isAdmin, "/Morosos/Index");
+            bool puedeVerClientes = TienePermisoModulo(isAdmin, "/Core/Clientes/Index", "/Clientes/Index");
+            bool puedeVerPagos = TienePermisoModulo(isAdmin, "/Core/PagoTarjeta/Index", "/PagoTarjeta/Index");
+            bool puedeVerSolicitudes = TienePermisoModulo(isAdmin, "/Core/SolicitudDeTarjeta/Index", "/SolicitudDeTarjeta/Index");
+            bool puedeVerMorosos = TienePermisoModulo(isAdmin, "/Core/Morosos/Index", "/Morosos/Index");
 
             var hoy = DateTime.Today;
 

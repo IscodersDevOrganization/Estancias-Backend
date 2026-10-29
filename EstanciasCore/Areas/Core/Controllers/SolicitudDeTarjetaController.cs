@@ -192,6 +192,10 @@ namespace EstanciasCore.Areas.Core.Controllers
                 {
                     if (!SolicitudDeTarjetaExists(model.Id))
                     {
+                        if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                        {
+                            return Json(new { success = false, message = "La solicitud ya no existe." });
+                        }
                         return NotFound();
                     }
                     else
@@ -199,8 +203,25 @@ namespace EstanciasCore.Areas.Core.Controllers
                         throw;
                     }
                 }
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return Json(new { 
+                        success = true, 
+                        id = entity.Id, 
+                        nombre = entity.Nombre,
+                        apellido = entity.Apellido,
+                        dni = entity.DNI,
+                        telefono = entity.Telefono,
+                        email = entity.Email,
+                        message = "Solicitud de tarjeta actualizada correctamente." 
+                    });
+                }
                 TempData["Success"] = "Solicitud de tarjeta actualizada correctamente.";
                 return RedirectToAction(nameof(Index));
+            }
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return Json(new { success = false, message = "Por favor verifique los datos ingresados en el formulario." });
             }
             CargarViewBags(model.Provincia?.Id);
             return PartialView(model);
@@ -298,12 +319,25 @@ namespace EstanciasCore.Areas.Core.Controllers
                 }
                 catch (Exception ex)
                 {
+                    if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                    {
+                        return Json(new { success = true, id = entity.Id, numeroTarjeta = entity.NumeroTarjeta, warning = $"La solicitud fue aprobada, pero ocurrió un error al enviar el email: {ex.Message}", message = "La solicitud fue aprobada, con advertencia en el envío de correo." });
+                    }
                     TempData["Error"] = $"La solicitud fue aprobada, pero ocurrió un error al enviar el email: {ex.Message}";
                     return RedirectToAction(nameof(Index));
                 }
 
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return Json(new { success = true, id = entity.Id, numeroTarjeta = entity.NumeroTarjeta, message = "La solicitud fue aprobada correctamente y se envió la notificación por correo electrónico." });
+                }
+
                 TempData["Success"] = "La solicitud fue aprobada correctamente y se envió la notificación por correo electrónico.";
                 return RedirectToAction(nameof(Index));
+            }
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return Json(new { success = false, message = "Por favor verifique los datos requeridos." });
             }
             return PartialView(model);
         }
@@ -355,11 +389,26 @@ namespace EstanciasCore.Areas.Core.Controllers
                 }
                 catch (Exception ex)
                 {
+                    if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                    {
+                        return Json(new { success = true, id = entity.Id, warning = $"La solicitud fue rechazada, pero ocurrió un error al enviar el email: {ex.Message}", message = "La solicitud fue marcada como rechazada." });
+                    }
                     TempData["Error"] = $"La solicitud fue marcada como rechazada, pero ocurrió un error al enviar el email: {ex.Message}";
                     return RedirectToAction(nameof(Index));
                 }
 
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return Json(new { success = true, id = entity.Id, message = "La solicitud fue rechazada y se envió la notificación por correo electrónico." });
+                }
                 TempData["Success"] = "La solicitud fue rechazada y se envió la notificación por correo electrónico.";
+            }
+            else
+            {
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return Json(new { success = false, message = "Solicitud no encontrada." });
+                }
             }
             return RedirectToAction(nameof(Index));
         }
@@ -430,11 +479,26 @@ namespace EstanciasCore.Areas.Core.Controllers
                 }
                 catch (Exception ex)
                 {
+                    if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                    {
+                        return Json(new { success = true, id = entity.Id, warning = $"La solicitud fue puesta en Nueva Revisión, pero ocurrió un error al enviar el email: {ex.Message}", message = "La solicitud fue puesta en Nueva Revisión." });
+                    }
                     TempData["Error"] = $"La solicitud fue puesta en Nueva Revisión, pero ocurrió un error al enviar el email: {ex.Message}";
                     return RedirectToAction(nameof(Index));
                 }
 
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return Json(new { success = true, id = entity.Id, message = "La solicitud fue puesta en Nueva Revisión y se envió la notificación por correo electrónico." });
+                }
                 TempData["Success"] = "La solicitud fue puesta en Nueva Revisión y se envió la notificación por correo electrónico.";
+            }
+            else
+            {
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return Json(new { success = false, message = "Solicitud no encontrada." });
+                }
             }
             return RedirectToAction(nameof(Index));
         }
@@ -447,7 +511,18 @@ namespace EstanciasCore.Areas.Core.Controllers
             {
                 _context.SolicitudDeTarjeta.Remove(entity);
                 await _context.SaveChangesAsync();
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return Json(new { success = true, id = id, message = "Solicitud de tarjeta eliminada correctamente." });
+                }
                 TempData["Success"] = "Solicitud de tarjeta eliminada correctamente.";
+            }
+            else
+            {
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return Json(new { success = false, message = "Solicitud no encontrada." });
+                }
             }
             return RedirectToAction(nameof(Index));
         }
@@ -482,11 +557,25 @@ namespace EstanciasCore.Areas.Core.Controllers
                 return NotFound();
             }
 
-            var entity = await _context.SolicitudDeTarjeta.FindAsync(id);
+            var entity = await _context.SolicitudDeTarjeta
+                .Include(s => s.Localidad)
+                .Include(s => s.Provincia)
+                .FirstOrDefaultAsync(s => s.Id == id);
             if (entity == null)
             {
                 return NotFound();
             }
+
+            ViewBag.FechaNacimiento = entity.FechaNacimiento;
+            var loc = entity.Localidad != null ? entity.Localidad.Descripcion : "";
+            var prov = entity.Provincia != null ? (!string.IsNullOrEmpty(entity.Provincia.DescripcionCompleta) ? entity.Provincia.DescripcionCompleta : entity.Provincia.Descripcion) : "";
+            var direccion = $"{entity.Calle} {entity.Altura} {entity.PisoDepto}".Trim();
+            var partes = new System.Collections.Generic.List<string>();
+            if (!string.IsNullOrWhiteSpace(direccion)) partes.Add(direccion);
+            if (!string.IsNullOrWhiteSpace(loc)) partes.Add(loc);
+            if (!string.IsNullOrWhiteSpace(prov)) partes.Add(prov);
+            ViewBag.Domicilio = string.Join(", ", partes);
+            ViewBag.CodigoPostal = entity.CodigoPostal;
 
             var model = new AdjuntosSolicitudDTO
             {

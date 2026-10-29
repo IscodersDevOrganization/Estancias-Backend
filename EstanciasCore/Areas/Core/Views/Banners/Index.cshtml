@@ -1,10 +1,6 @@
-@model IEnumerable<DAL.Models.Banners>
 @{
-    ViewData["Title"] = "Banners";
+    ViewData["Title"] = "Listado de Banners";
+    ViewData["BackArrow"] = "/Home/Index";
 }
-
-<box color="Info">
-    <load id="tablaBanners" load-url="/Core/Banners/ObtenerBanners">
-        <box-header title="Listado de Banners"></box-header>
-    </load>
-</box>
+<load id="tablaBanners" load-url="/Core/Banners/ObtenerBanners">
+</load>

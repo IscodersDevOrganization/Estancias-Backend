@@ -1,163 +1,480 @@
-﻿@using Commons.Identity.Extensions
+@using Commons.Identity.Extensions
 @using Commons.Models
 @model IEnumerable<SidebarMenu>
-<aside class="main-sidebar" style="background: #0326a0; background-image: url(/images/1242-x-2808.png); background-size: contain; background-repeat: no-repeat; background-attachment: fixed; background-clip: content-box; ">
-    <!-- sidebar: style can be found in sidebar.less -->
-    <section class="sidebar">
-        <div class="user-panel">
-            @*<div class="pull-left image">
-                <img src="~/images/tenor.gif" class="img-circle" alt="Unidad Image">
-            </div>
-            <div class="pull-left info">
-                <p>@User.GetWorkSpaceName()</p>
-                <a href="#" onclick="ChangeSelectedUnidad()"><i class="fa fa-refresh text-muted"></i> Cambiar Establecimiento</a>
-            </div>*@
-        </div>
-        <!-- Sidebar Menu -->
-        <ul class="sidebar-menu" data-widget="tree">
-            @foreach (var menu in Model as IEnumerable<SidebarMenu>)
+
+@{
+    var currentPath = Context.Request.Path.Value ?? "";
+
+    bool IsPathMatch(string url)
+    {
+        if (string.IsNullOrEmpty(url) || url == "#" || url == "/")
+        {
+            return false;
+        }
+        var normalizedCurrent = currentPath.TrimEnd('/');
+        var normalizedUrl = url.TrimEnd('/');
+
+        if (string.Equals(normalizedCurrent, normalizedUrl, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (normalizedCurrent.StartsWith(normalizedUrl + "/", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (string.Equals(normalizedCurrent + "/Index", normalizedUrl, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalizedCurrent, normalizedUrl + "/Index", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    bool IsTreeActive(SidebarMenu item)
+    {
+        if (item == null || item.TreeChild == null)
+        {
+            return false;
+        }
+        foreach (var child in item.TreeChild.Where(x => x != null))
+        {
+            if (IsPathMatch(child.URLPath))
             {
-                if (menu.Type == SidebarMenuType.Header)
+                return true;
+            }
+            if (child.TreeChild != null)
+            {
+                foreach (var grandChild in child.TreeChild)
                 {
-                    <li class="header">@menu.Name</li>
-                }
-                else if (menu.Type == SidebarMenuType.Link)
-                {
-                    var active = string.Empty;
-                    if (menu.URLPath != "/" && @Context.Request.Path.Value.Contains(menu.URLPath))
+                    if (grandChild != null)
                     {
-                        active = "active";
-                    }
-                    <li class="@active">
-                        <a href="@menu.URLPath">
-                            <i class="@menu.IconClassName"></i>
-                            <span>@menu.Name</span>
-                            <span class="pull-right-container">
-                                @{
-                                    if (menu.LinkCounter.Item1 > 0)
-                                    {
-                                        <small class="label pull-right bg-red">@menu.LinkCounter.Item1</small>
-                                    }
-                                    if (menu.LinkCounter.Item2 > 0)
-                                    {
-                                        <small class="label pull-right bg-green">@menu.LinkCounter.Item2</small>
-                                    }
-                                    if (menu.LinkCounter.Item3 > 0)
-                                    {
-                                        <small class="label pull-right bg-blue">@menu.LinkCounter.Item3</small>
-                                    }
-                                }
-                            </span>
-                        </a>
-                    </li>
-                }
-                else if (menu.Type == SidebarMenuType.Tree)
-                {
-                    var active = string.Empty;
-                    if (menu.TreeChild.Any(x => @Context.Request.Path.Value.Contains(x.URLPath)) || menu.TreeChild.Where(x => x.Type == SidebarMenuType.Tree).SelectMany(x => x.TreeChild).Any(x => @Context.Request.Path.Value.Contains(x.URLPath)))
-                    {
-                        active = "active";
-                    }
-
-                    <li class="treeview @active">
-                        <a href="#">
-                            <i class="@menu.IconClassName"></i> <span>@menu.Name</span>
-                            <span class="pull-right-container">
-                                <i class="fa fa-angle-left pull-right"></i>
-                            </span>
-                        </a>
-                        <ul class="treeview-menu">
-                            @foreach (SidebarMenu subMenu in menu.TreeChild)
+                        if (IsPathMatch(grandChild.URLPath))
+                        {
+                            return true;
+                        }
+                        if (grandChild.TreeChild != null)
+                        {
+                            foreach (var greatChild in grandChild.TreeChild)
                             {
-                                if (subMenu.Type == SidebarMenuType.Link)
+                                if (greatChild != null && IsPathMatch(greatChild.URLPath))
                                 {
-                                    active = string.Empty;
-                                    if (Context.Request.Path.Value.Contains(subMenu.URLPath))
-                                    {
-                                        active = "active";
-                                    }
-                                    <li class="@active">
-                                        <a href="@subMenu.URLPath">
-                                            <i class="@subMenu.IconClassName"></i> @subMenu.Name
-                                        </a>
-                                    </li>
-                                }
-                                else if (subMenu.Type == SidebarMenuType.Tree)
-                                {
-                                    active = string.Empty;
-                                    if (subMenu.TreeChild.Any(x => @Context.Request.Path.Value.Contains(x.URLPath)) || subMenu.TreeChild.Where(x => x.Type == SidebarMenuType.Tree).SelectMany(x => x.TreeChild).Any(x => @Context.Request.Path.Value.Contains(x.URLPath)))
-                                    {
-                                        active = "active";
-                                    }
-
-                                    <li class="treeview @active">
-                                        <a href="#">
-                                            <i class="@subMenu.IconClassName"></i> <span>@subMenu.Name</span>
-                                            <span class="pull-right-container">
-                                                <i class="fa fa-angle-left pull-right"></i>
-                                            </span>
-                                        </a>
-                                        <ul class="treeview-menu">
-                                            @foreach (SidebarMenu subSubMenu in subMenu.TreeChild)
-                                            {
-                                                if (subSubMenu.Type == SidebarMenuType.Link)
-                                                {
-                                                    active = string.Empty;
-                                                    if (Context.Request.Path.Value.Contains(subSubMenu.URLPath))
-                                                    {
-                                                        active = "active";
-                                                    }
-                                                    <li class="@active">
-                                                        <a href="@subSubMenu.URLPath">
-                                                            <i class="@subSubMenu.IconClassName"></i> @subSubMenu.Name
-                                                        </a>
-                                                    </li>
-                                                }
-                                                else if (subSubMenu.Type == SidebarMenuType.Tree)
-                                                {
-                                                    active = string.Empty;
-                                                    if (subSubMenu.TreeChild.Any(x => @Context.Request.Path.Value.Contains(x.URLPath)) || subSubMenu.TreeChild.Where(x => x.Type == SidebarMenuType.Tree).SelectMany(x => x.TreeChild).Any(x => @Context.Request.Path.Value.Contains(x.URLPath)))
-                                                    {
-                                                        active = "active";
-                                                    }
-
-                                                    <li class="treeview @active">
-                                                        <a href="#">
-                                                            <i class="@subSubMenu.IconClassName"></i> <span>@subSubMenu.Name</span>
-                                                            <span class="pull-right-container">
-                                                                <i class="fa fa-angle-left pull-right"></i>
-                                                            </span>
-                                                        </a>
-                                                        <ul class="treeview-menu">
-                                                            @foreach (SidebarMenu subsubSubMenu in subSubMenu.TreeChild)
-                                                            {
-                                                                if (subsubSubMenu.Type == SidebarMenuType.Link)
-                                                                {
-                                                                    active = string.Empty;
-                                                                    if (Context.Request.Path.Value.Contains(subsubSubMenu.URLPath))
-                                                                    {
-                                                                        active = "active";
-                                                                    }
-                                                                    <li class="@active">
-                                                                        <a href="@subsubSubMenu.URLPath">
-                                                                            <i class="@subsubSubMenu.IconClassName"></i> @subsubSubMenu.Name
-                                                                        </a>
-                                                                    </li>
-                                                                }
-
-                                                            }
-                                                        </ul>
-                                                    </li>
-                                                }
-                                            }
-                                        </ul>
-                                    </li>
+                                    return true;
                                 }
                             }
-                        </ul>
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    var isDashActive = (currentPath == "/" || currentPath.Equals("/Home", StringComparison.OrdinalIgnoreCase) || currentPath.StartsWith("/Home/Index", StringComparison.OrdinalIgnoreCase));
+    var rawMenuList = (Model as IEnumerable<SidebarMenu>) ?? Enumerable.Empty<SidebarMenu>();
+
+    var hiddenItemNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "Moneda",
+        "Monedas",
+        "Tipo de Clientes",
+        "Tipos de Clientes",
+        "Grupos",
+        "Conceptos",
+        "Cuentas Corrientes",
+        "Tipos Movimientos Billetera",
+        "Tipo Movimientos Billetera",
+        "Movimientos Billetera",
+        "Movimientos de Billetera",
+        "Billetera",
+        "Vendedores",
+        "Vendedor",
+        "Configuración",
+        "Configuracion"
+    };
+
+    bool ShouldHideItem(SidebarMenu item)
+    {
+        if (item == null)
+        {
+            return true;
+        }
+        var name = (item.Name ?? "").Trim();
+        if (hiddenItemNames.Contains(name))
+        {
+            return true;
+        }
+
+        var url = (item.URLPath ?? "").ToLowerInvariant();
+        if (url.Contains("/monedas") ||
+            url.Contains("/tiposclientes") ||
+            url.Contains("/grupos") ||
+            url.Contains("/conceptos") ||
+            url.Contains("/cuentascorrientes") ||
+            url.Contains("/tipomovimientobilletera") ||
+            url.Contains("/movimientobilletera") ||
+            url.Contains("/billetera") ||
+            url.Contains("/vendedores") ||
+            url.Contains("/vendedor") ||
+            url.Contains("/configuracion"))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    var menuList = new List<SidebarMenu>();
+
+    foreach (var topMenu in rawMenuList)
+    {
+        if (topMenu == null)
+        {
+            continue;
+        }
+
+        if (string.Equals(topMenu.Name, "Datos", StringComparison.OrdinalIgnoreCase))
+        {
+            var newDatos = new SidebarMenu
+            {
+                Name = topMenu.Name,
+                IconClassName = topMenu.IconClassName,
+                Type = topMenu.Type,
+                URLPath = topMenu.URLPath,
+                TreeChild = new List<SidebarMenu>()
+            };
+
+            if (topMenu.TreeChild != null)
+            {
+                foreach (var child in topMenu.TreeChild)
+                {
+                    if (child == null)
+                    {
+                        continue;
+                    }
+
+                    // Ocultar el menu Completo de Especificos
+                    if (string.Equals(child.Name, "Específicos", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(child.Name, "Especificos", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    // Aplanar todo lo de Generales directamente dentro de Datos
+                    if (string.Equals(child.Name, "Generales", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (child.TreeChild != null)
+                        {
+                            foreach (var grandChild in child.TreeChild)
+                            {
+                                if (grandChild != null && !ShouldHideItem(grandChild))
+                                {
+                                    newDatos.TreeChild.Add(grandChild);
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (!ShouldHideItem(child))
+                        {
+                            newDatos.TreeChild.Add(child);
+                        }
+                    }
+                }
+            }
+
+            menuList.Add(newDatos);
+        }
+        else
+        {
+            if (topMenu.TreeChild != null)
+            {
+                topMenu.TreeChild = topMenu.TreeChild.Where(c => c != null && !ShouldHideItem(c)).ToList();
+            }
+            menuList.Add(topMenu);
+        }
+    }
+
+    string GetModernIcon(string name, string originalIcon, string urlPath = "")
+    {
+        // 1. Menú Principal & Secciones
+        if (name == "Dashboard") { return "fa fa-th-large"; }
+        if (name == "Datos") { return "fa fa-database"; }
+        if (name == "Gestión") { return "fa fa-cubes"; }
+        if (name == "Reportes") { return "fa fa-bar-chart"; }
+        if (name == "Sistema") { return "fa fa-gear"; }
+        if (name == "Cuenta") { return "fa fa-user-circle"; }
+        if (name == "Configuración") { return "fa fa-cog"; }
+        if (name == "Cerrar Sesión" || name == "Cierra Sesión" || name == "Cierra Sesion") { return "fa fa-sign-out"; }
+
+        // 2. Módulo Datos
+        if (name == "Tipos de Documento") { return "fa fa-id-card-o"; }
+        if (name == "Sucursales") { return "fa fa-building-o"; }
+        if (name == "Paises") { return "fa fa-globe"; }
+        if (name == "Provincias") { return "fa fa-map-marker"; }
+        if (name == "Localidad") { return "fa fa-map-pin"; }
+        if (name == "Empresas") { return "fa fa-briefcase"; }
+        if (name == "Leyendas") { return "fa fa-commenting-o"; }
+        if (name == "Categoria de Usuarios") { return "fa fa-tags"; }
+
+        // Distinción para Reportes si comparten nombre de submódulo
+        if (!string.IsNullOrEmpty(urlPath) && urlPath.IndexOf("/Reportes/", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            if (name == "Pagos Tarjeta") { return "fa fa-file-text-o"; }
+            if (name == "Clientes") { return "fa fa-pie-chart"; }
+            if (name == "Resumen Tarjeta") { return "fa fa-table"; }
+            if (name == "Cupones") { return "fa fa-line-chart"; }
+        }
+
+        // 3. Módulo Gestión (Íconos únicos sin repetirse)
+        if (name == "Clientes") { return "fa fa-address-book-o"; }
+        if (name == "Pagos Tarjeta") { return "fa fa-credit-card"; }
+        if (name == "Histórico de Pagos Tarjeta" || name.IndexOf("Histórico", StringComparison.OrdinalIgnoreCase) >= 0 || name.IndexOf("Historico", StringComparison.OrdinalIgnoreCase) >= 0) { return "fa fa-history"; }
+        if (name == "Notificaciones") { return "fa fa-bell-o"; }
+        if (name == "Notificación") { return "fa fa-paper-plane-o"; }
+        if (name == "Plantillas") { return "fa fa-file-code-o"; }
+        if (name == "Lista de Distribución") { return "fa fa-list-alt"; }
+        if (name == "Puntos y Cupones") { return "fa fa-ticket"; }
+        if (name == "Validar Cupón") { return "fa fa-check-circle-o"; }
+        if (name == "Cupones") { return "fa fa-gift"; }
+        if (name == "Puntos Clientes") { return "fa fa-star-o"; }
+        if (name == "Categorias de Cupones") { return "fa fa-bookmark-o"; }
+        if (name == "Relación Puntos") { return "fa fa-sliders"; }
+        if (name == "Vendedores") { return "fa fa-handshake-o"; }
+        if (name == "Novedades") { return "fa fa-newspaper-o"; }
+        if (name == "Promociones") { return "fa fa-percent"; }
+        if (name == "Banners") { return "fa fa-picture-o"; }
+        if (name == "Proveedor") { return "fa fa-truck"; }
+        if (name == "Imagen de Intro") { return "fa fa-desktop"; }
+        if (name == "Catálogo") { return "fa fa-book"; }
+        if (name == "Marcas") { return "fa fa-certificate"; }
+        if (name == "Menú Mobile") { return "fa fa-mobile"; }
+        if (name == "PreRegistro de Categoria") { return "fa fa-user-plus"; }
+        if (name == "Morosos") { return "fa fa-exclamation-triangle"; }
+        if (name == "Solicitudes de Tarjeta") { return "fa fa-inbox"; }
+        if (name == "Movimientos Tarjeta (LOAN)") { return "fa fa-money"; }
+
+        // 4. Módulo Sistema
+        if (name == "Usuarios") { return "fa fa-users"; }
+        if (name == "Funciones") { return "fa fa-shield"; }
+        if (name == "Rol" || name == "Roles" || name == "Roles y Permisos") { return "fa fa-user"; }
+
+        if (!string.IsNullOrEmpty(originalIcon) && !originalIcon.Contains("circle-o"))
+        {
+            return originalIcon;
+        }
+        return "fa fa-circle-o";
+    }
+
+    string GetModernDisplayName(string name)
+    {
+        if (name == "Rol" || name == "Roles")
+        {
+            return "Roles y Permisos";
+        }
+        if (name == "Cierra Sesion" || name == "Cierra Sesión")
+        {
+            return "Cerrar Sesión";
+        }
+        return name;
+    }
+
+    var modulos = menuList.Where(m => m != null && (m.Name == "Datos" || m.Name == "Gestión" || m.Name == "Reportes")).ToList();
+    var sistema = menuList.FirstOrDefault(m => m != null && m.Name == "Sistema");
+    var otrosMenus = menuList.Where(m => m != null && m.Name != "Menú Principal" && m.Name != "Datos" && m.Name != "Gestión" && m.Name != "Reportes" && m.Name != "Sistema" && m.Name != "Sesión" && m.Type != SidebarMenuType.Header).ToList();
+}
+
+<aside class="main-sidebar">
+    <section class="sidebar">
+        <!-- Sidebar Menu -->
+        <ul class="sidebar-menu" data-widget="tree">
+            <!-- 1. MENÚ PRINCIPAL -->
+            <li class="header">Menú Principal</li>
+            <li class="@(isDashActive ? "active" : "")">
+                <span class="active-indicator-bar"></span>
+                <a href="/Home/Index">
+                    <i class="fa fa-th-large"></i>
+                    <span>Dashboard</span>
+                </a>
+            </li>
+
+            <!-- 2. MÓDULOS -->
+            @if (modulos.Any())
+            {
+                <li class="header">Módulos</li>
+                @foreach (var mod in modulos)
+                {
+                    var treeActive = IsTreeActive(mod);
+                    var iconClass = GetModernIcon(mod.Name, mod.IconClassName);
+                    <li class="treeview @(treeActive ? "active menu-open" : "")">
+                        <a href="#">
+                            <i class="@iconClass"></i>
+                            <span>@mod.Name</span>
+                            <span class="pull-right-container">
+                                <i class="fa fa-angle-right pull-right"></i>
+                            </span>
+                        </a>
+                        @if (mod.TreeChild != null && mod.TreeChild.Any())
+                        {
+                            <ul class="treeview-menu" style="@(treeActive ? "display: block;" : "")">
+                                @foreach (var subMenu in mod.TreeChild.Where(x => x != null))
+                                {
+                                    if (subMenu.Type == SidebarMenuType.Link)
+                                    {
+                                        var subActive = IsPathMatch(subMenu.URLPath);
+                                        <li class="@(subActive ? "active" : "")">
+                                            <a href="@subMenu.URLPath">
+                                                <i class="@GetModernIcon(subMenu.Name, subMenu.IconClassName, subMenu.URLPath)"></i>
+                                                <span>@subMenu.Name</span>
+                                            </a>
+                                        </li>
+                                    }
+                                    else if (subMenu.Type == SidebarMenuType.Tree)
+                                    {
+                                        var subTreeActive = IsTreeActive(subMenu);
+                                        <li class="treeview @(subTreeActive ? "active menu-open" : "")">
+                                            <a href="#">
+                                                <i class="@GetModernIcon(subMenu.Name, subMenu.IconClassName, subMenu.URLPath)"></i>
+                                                <span>@subMenu.Name</span>
+                                                <span class="pull-right-container">
+                                                    <i class="fa fa-angle-right pull-right"></i>
+                                                </span>
+                                            </a>
+                                            @if (subMenu.TreeChild != null && subMenu.TreeChild.Any())
+                                            {
+                                                <ul class="treeview-menu" style="@(subTreeActive ? "display: block;" : "")">
+                                                    @foreach (var subSubMenu in subMenu.TreeChild.Where(x => x != null))
+                                                    {
+                                                        if (subSubMenu.Type == SidebarMenuType.Link)
+                                                        {
+                                                            var subSubActive = IsPathMatch(subSubMenu.URLPath);
+                                                            <li class="@(subSubActive ? "active" : "")">
+                                                                <a href="@subSubMenu.URLPath">
+                                                                    <i class="@GetModernIcon(subSubMenu.Name, subSubMenu.IconClassName, subSubMenu.URLPath)"></i>
+                                                                    <span>@subSubMenu.Name</span>
+                                                                </a>
+                                                            </li>
+                                                        }
+                                                        else if (subSubMenu.Type == SidebarMenuType.Tree)
+                                                        {
+                                                            var subSubTreeActive = IsTreeActive(subSubMenu);
+                                                            <li class="treeview @(subSubTreeActive ? "active menu-open" : "")">
+                                                                <a href="#">
+                                                                    <i class="@GetModernIcon(subSubMenu.Name, subSubMenu.IconClassName, subSubMenu.URLPath)"></i>
+                                                                    <span>@subSubMenu.Name</span>
+                                                                    <span class="pull-right-container">
+                                                                        <i class="fa fa-angle-right pull-right"></i>
+                                                                    </span>
+                                                                </a>
+                                                                @if (subSubMenu.TreeChild != null && subSubMenu.TreeChild.Any())
+                                                                {
+                                                                    <ul class="treeview-menu" style="@(subSubTreeActive ? "display: block;" : "")">
+                                                                        @foreach (var deepMenu in subSubMenu.TreeChild.Where(x => x != null))
+                                                                        {
+                                                                            var deepActive = IsPathMatch(deepMenu.URLPath);
+                                                                            <li class="@(deepActive ? "active" : "")">
+                                                                                <a href="@deepMenu.URLPath">
+                                                                                    <i class="@GetModernIcon(deepMenu.Name, deepMenu.IconClassName, deepMenu.URLPath)"></i>
+                                                                                    <span>@deepMenu.Name</span>
+                                                                                </a>
+                                                                            </li>
+                                                                        }
+                                                                    </ul>
+                                                                }
+                                                            </li>
+                                                        }
+                                                    }
+                                                </ul>
+                                            }
+                                        </li>
+                                    }
+                                }
+                            </ul>
+                        }
                     </li>
                 }
             }
+
+            <!-- 3. SISTEMA -->
+            @if (sistema != null)
+            {
+                <li class="header header-sistema">
+                    <span>Sistema</span>
+                </li>
+                @if (sistema.TreeChild != null && sistema.TreeChild.Any())
+                {
+                    @foreach (var sysChild in sistema.TreeChild.Where(x => x != null))
+                    {
+                        var isSysActive = IsPathMatch(sysChild.URLPath);
+                        var displayName = GetModernDisplayName(sysChild.Name);
+                        var icon = GetModernIcon(sysChild.Name, sysChild.IconClassName, sysChild.URLPath);
+
+                        <li class="@(isSysActive ? "active" : "")">
+                            <span class="active-indicator-bar"></span>
+                            <a href="@sysChild.URLPath">
+                                <i class="@icon"></i>
+                                <span>@displayName</span>
+                            </a>
+                        </li>
+                    }
+                }
+            }
+
+            <!-- 4. OTROS MÓDULOS (si hubiese otros ítems registrados en el sistema) -->
+            @foreach (var extra in otrosMenus)
+            {
+                if (extra.Type == SidebarMenuType.Link)
+                {
+                    var isExtraActive = IsPathMatch(extra.URLPath);
+                    <li class="@(isExtraActive ? "active" : "")">
+                        <span class="active-indicator-bar"></span>
+                        <a href="@extra.URLPath">
+                            <i class="@GetModernIcon(extra.Name, extra.IconClassName, extra.URLPath)"></i>
+                            <span>@extra.Name</span>
+                        </a>
+                    </li>
+                }
+                else if (extra.Type == SidebarMenuType.Tree)
+                {
+                    var extraTreeActive = IsTreeActive(extra);
+                    <li class="treeview @(extraTreeActive ? "active menu-open" : "")">
+                        <a href="#">
+                            <i class="@GetModernIcon(extra.Name, extra.IconClassName, extra.URLPath)"></i>
+                            <span>@extra.Name</span>
+                            <span class="pull-right-container">
+                                <i class="fa fa-angle-right pull-right"></i>
+                            </span>
+                        </a>
+                        @if (extra.TreeChild != null && extra.TreeChild.Any())
+                        {
+                            <ul class="treeview-menu" style="@(extraTreeActive ? "display: block;" : "")">
+                                @foreach (var extraChild in extra.TreeChild.Where(x => x != null))
+                                {
+                                    var isECActive = IsPathMatch(extraChild.URLPath);
+                                    <li class="@(isECActive ? "active" : "")">
+                                        <a href="@extraChild.URLPath">
+                                            <i class="@GetModernIcon(extraChild.Name, extraChild.IconClassName, extraChild.URLPath)"></i>
+                                            <span>@extraChild.Name</span>
+                                        </a>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </li>
+                }
+            }
+
+            <!-- 5. CUENTA -->
+            <li class="header">Cuenta</li>
+            <li>
+                <a href="javascript:document.getElementById('logoutForm').submit()" class="menu-link-logout">
+                    <i class="fa fa-sign-out"></i>
+                    <span>Cerrar Sesión</span>
+                </a>
+            </li>
         </ul>
         <!-- /.sidebar-menu -->
     </section>

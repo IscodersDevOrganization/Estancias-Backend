@@ -1,9 +1,90 @@
 @model DAL.DTOs.AdjuntosSolicitudDTO
+@inject DAL.Data.EstanciasContext _context
+@using Microsoft.EntityFrameworkCore
+@using System.Collections.Generic
+
+@{
+    DateTime? fechaNac = null;
+    string domicilio = null;
+    string cp = null;
+
+    if (ViewBag.FechaNacimiento != null)
+    {
+        fechaNac = (DateTime)ViewBag.FechaNacimiento;
+    }
+    if (ViewBag.Domicilio != null)
+    {
+        domicilio = (string)ViewBag.Domicilio;
+    }
+    if (ViewBag.CodigoPostal != null)
+    {
+        cp = (string)ViewBag.CodigoPostal;
+    }
+
+    if (string.IsNullOrEmpty(domicilio) && Model != null && Model.Id > 0)
+    {
+        var sol = _context.SolicitudDeTarjeta
+            .Include(s => s.Localidad)
+            .Include(s => s.Provincia)
+            .FirstOrDefault(s => s.Id == Model.Id);
+        if (sol != null)
+        {
+                        if (!fechaNac.HasValue)
+            {
+                fechaNac = sol.FechaNacimiento;
+            }
+            var loc = sol.Localidad != null ? sol.Localidad.Descripcion : "";
+            var prov = sol.Provincia != null ? (!string.IsNullOrEmpty(sol.Provincia.DescripcionCompleta) ? sol.Provincia.DescripcionCompleta : sol.Provincia.Descripcion) : "";
+            var direccion = $"{sol.Calle} {sol.Altura} {sol.PisoDepto}".Trim();
+            var partes = new List<string>();
+            if (!string.IsNullOrWhiteSpace(direccion))
+            {
+                partes.Add(direccion);
+            }
+            if (!string.IsNullOrWhiteSpace(loc))
+            {
+                partes.Add(loc);
+            }
+            if (!string.IsNullOrWhiteSpace(prov))
+            {
+                partes.Add(prov);
+            }
+            domicilio = string.Join(", ", partes);
+            if (string.IsNullOrEmpty(cp))
+            {
+                cp = sol.CodigoPostal;
+            }
+        }
+    }
+}
 
 <div class="row" style="margin-bottom: 15px;">
     <div class="col-md-12">
-        <div class="well well-sm text-center" style="margin-bottom: 10px; font-size: 14px;">
-            <strong>Solicitante:</strong> @Model.NombreCompleto &nbsp;&nbsp;|&nbsp;&nbsp; <strong>DNI:</strong> @Model.DNI
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin-bottom: 5px;">
+            <div class="row">
+                <div class="col-sm-5" style="margin-bottom: 8px;">
+                    <span class="text-muted" style="font-size: 11px; display: block; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Solicitante</span>
+                    <strong style="font-size: 14px; color: #1e293b;"><i class="fa fa-user" style="color: #64748b; margin-right: 6px;"></i>@Model.NombreCompleto</strong>
+                </div>
+                <div class="col-sm-3" style="margin-bottom: 8px;">
+                    <span class="text-muted" style="font-size: 11px; display: block; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">DNI</span>
+                    <strong style="font-size: 14px; color: #1e293b;"><i class="fa fa-id-card-o" style="color: #64748b; margin-right: 6px;"></i>@Model.DNI</strong>
+                </div>
+                <div class="col-sm-4" style="margin-bottom: 8px;">
+                    <span class="text-muted" style="font-size: 11px; display: block; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Fecha Nacimiento</span>
+                    <strong style="font-size: 14px; color: #1e293b;"><i class="fa fa-birthday-cake" style="color: #64748b; margin-right: 6px;"></i>@(fechaNac.HasValue ? fechaNac.Value.ToString("dd/MM/yyyy") : "-")</strong>
+                </div>
+            </div>
+            <div class="row" style="margin-top: 6px; padding-top: 8px; border-top: 1px solid #edf2f7;">
+                <div class="col-sm-9" style="margin-bottom: 4px;">
+                    <span class="text-muted" style="font-size: 11px; display: block; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Domicilio</span>
+                    <strong style="font-size: 13px; color: #334155;"><i class="fa fa-map-marker" style="color: #64748b; margin-right: 6px;"></i>@(!string.IsNullOrWhiteSpace(domicilio) ? domicilio : "-")</strong>
+                </div>
+                <div class="col-sm-3" style="margin-bottom: 4px;">
+                    <span class="text-muted" style="font-size: 11px; display: block; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Código Postal</span>
+                    <strong style="font-size: 13px; color: #334155;"><i class="fa fa-envelope-o" style="color: #64748b; margin-right: 6px;"></i>@(!string.IsNullOrWhiteSpace(cp) ? cp : "-")</strong>
+                </div>
+            </div>
         </div>
     </div>
 </div>

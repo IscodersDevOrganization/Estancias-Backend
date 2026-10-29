@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -11,6 +11,7 @@ using DAL.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.EntityFrameworkCore;
 using EstanciasCore.Services;
 
 namespace EstanciasCore.Controllers
@@ -29,27 +30,28 @@ namespace EstanciasCore.Controllers
         {
             breadcumb.Add(new Message() { DisplayName = "Clientes" });
             ViewBag.Breadcrumb = breadcumb;
-            var empresa = _context.Empresas.FirstOrDefault();
-            var Clientes = _context.Clientes.Where(x => x.Usuario.UserName != null && x.NumeroLegajoLaboral == null ).ToList();
+
+
             return View();
         }
 
         public IActionResult ClienteDataTable()
         {
-            List<Clientes> clientes = _context.Clientes.Where(x => x.FechaBaja == null).ToList();
-            var query = from p in clientes
+
+            var query = from p in _context.Clientes.AsNoTracking().Where(x => x.FechaBaja == null).OrderByDescending(x => x.Id)
                         select new ClienteDTO
                         {
                             Id = p.Id,
                             Tipo = (p.TipoCliente!=null)?p.TipoCliente.Nombre:"---",
-                            NombreCompleto =(p.Persona!=null)?p.Persona.GetNombreCompleto():"---",
-                            CUIL = (p.Persona != null)? p.Persona.Cuil?.ToString():"---",
+                            NombreCompleto = p.Persona != null ? (p.Persona.Apellido + " " + p.Persona.Nombres) : "---",
+                            CUIL = p.Persona != null ? p.Persona.Cuil : "---",
                             RazonSocial = (p.RazonSocial!=null)?p.RazonSocial:"---",
                             Empresa =(p.Empresa!=null)? p.Empresa.RazonSocial:"---",
                             FechaIngreso = p.FechaIngreso.ToShortDateString(),
                             Estado = p.ClienteValidado
                         };
-            return DataTable<ClienteDTO>(query.AsQueryable<ClienteDTO>());
+            var data = query.ToList();
+            return DataTable<ClienteDTO>(data.AsQueryable());
         }
 
         public ActionResult _Create()

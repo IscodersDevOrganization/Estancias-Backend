@@ -1,392 +1,1554 @@
-﻿@using Commons.HtmlHelpers
+@using Commons.HtmlHelpers
 @model DAL.Models.Clientes
 @{
-    ViewData["Title"] = "Crear Cliente";
-}    
-<div class="row">
-    <div class="col-md-12">
-        <form asp-action="_Create">
-            @using (Html.BoxDefault(BoxColor.Info))
-            {
-                using (Html.BoxHeader("Información")) { }
-                @using (Html.BoxBody())
-                {
-                    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-                    <div class="form-group">
-                        <div class="row">
-                            <div class="col-md-3">
-                                <label asp-for="TipoCliente" class="control-label"></label>
-                                <select asp-items="@ViewBag.TiposClientes" asp-for="TipoCliente.Id" class="form-control" searchable="true"></select>
-                                <span asp-validation-for="TipoCliente" class="text-danger"></span>
-                            </div>
-                            <div class="col-md-2">
-                                <label asp-for="Persona.TipoDocumento" class="control-label"></label>
-                                <select asp-items="@ViewBag.TiposDocumento" asp-for="Persona.TipoDocumento.Id" class="form-control" searchable="true"></select>
-                                <span asp-validation-for="Persona.TipoDocumento" class="text-danger"></span>
-                            </div>
-                            <div class="col-md-2">
-                                <label asp-for="Persona.Pais" class="control-label"></label>
-                                <select asp-items="@ViewBag.Paises" asp-for="Persona.Pais.Id" class="form-control" searchable="true"></select>
-                                <span asp-validation-for="Persona.Pais" class="text-danger"></span>
+    ViewData["Title"] = "Crear Nuevo Cliente";
+    var fechaHoy = DateTime.Now.ToString("yyyy-MM-dd");
+}
+
+<style>
+    /* Estilos Modernos Exclusivos para la Pantalla de Creación de Clientes */
+    .client-edit-container {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        color: #1e293b;
+        max-width: 1400px;
+        margin: 0 auto;
+        padding-bottom: 70px;
+    }
+
+    /* Top Page Actions Bar */
+    .client-top-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .client-breadcrumbs {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: #64748b;
+    }
+
+    .client-breadcrumbs a {
+        color: #2563eb;
+        text-decoration: none;
+        font-weight: 500;
+        transition: color 0.15s ease;
+    }
+
+    .client-breadcrumbs a:hover {
+        color: #1d4ed8;
+    }
+
+    /* Hero Profile Card */
+    .client-hero-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 24px 28px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -2px rgba(0, 0, 0, 0.02);
+        margin-bottom: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 20px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .client-hero-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%);
+    }
+
+    .client-hero-main {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+    }
+
+    .client-avatar-badge {
+        width: 68px;
+        height: 68px;
+        border-radius: 16px;
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        color: #1d4ed8;
+        font-size: 26px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid #bfdbfe;
+        box-shadow: 0 4px 10px rgba(37, 99, 235, 0.1);
+        flex-shrink: 0;
+    }
+
+    .client-hero-details h2 {
+        font-size: 22px;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0 0 6px 0;
+        letter-spacing: -0.02em;
+    }
+
+    .client-badges-row {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .client-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.3;
+    }
+
+    .client-pill-default {
+        background: #f1f5f9;
+        color: #475569;
+        border: 1px solid #e2e8f0;
+    }
+
+    .client-pill-info {
+        background: #eff6ff;
+        color: #1d4ed8;
+        border: 1px solid #bfdbfe;
+    }
+
+    .client-pill-success {
+        background: #f0fdf4;
+        color: #15803d;
+        border: 1px solid #bbf7d0;
+    }
+
+    /* Modern Tabs Nav */
+    .client-tabs-nav {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: #ffffff;
+        padding: 8px;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+        margin-bottom: 20px;
+        overflow-x: auto;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    }
+
+    .client-tab-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 18px;
+        border-radius: 8px;
+        font-size: 13.5px;
+        font-weight: 600;
+        color: #64748b;
+        text-decoration: none !important;
+        border: 1px solid transparent;
+        white-space: nowrap;
+        transition: all 0.15s ease;
+        cursor: pointer;
+    }
+
+    .client-tab-link:hover {
+        background: #f8fafc;
+        color: #1e293b;
+    }
+
+    .client-tab-link.active {
+        background: #2563eb;
+        color: #ffffff;
+        box-shadow: 0 4px 8px rgba(37, 99, 235, 0.25);
+    }
+
+    .client-tab-link.active i {
+        color: #ffffff;
+    }
+
+    .client-tab-link i {
+        font-size: 14px;
+        color: #94a3b8;
+        transition: color 0.15s ease;
+    }
+
+    .tab-content > .tab-pane {
+        display: none;
+    }
+
+    .tab-content > .tab-pane.active {
+        display: block !important;
+        animation: fadeInTab 0.2s ease-in-out;
+    }
+
+    @@keyframes fadeInTab {
+        from { opacity: 0; transform: translateY(4px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Modern Form Section Cards */
+    .client-card-section {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 24px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+        margin-bottom: 20px;
+    }
+
+    .client-section-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding-bottom: 16px;
+        margin-bottom: 22px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .client-section-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        color: #2563eb;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 15px;
+        flex-shrink: 0;
+    }
+
+    .client-section-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0;
+    }
+
+    .client-section-subtitle {
+        font-size: 12.5px;
+        color: #64748b;
+        margin: 2px 0 0 0;
+    }
+
+    /* Modern Form Controls */
+    .form-group-modern {
+        margin-bottom: 18px;
+    }
+
+    .form-label-modern {
+        font-size: 12px;
+        font-weight: 600;
+        color: #475569;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-bottom: 6px;
+        display: block;
+    }
+
+    .form-label-modern .required-star {
+        color: #ef4444;
+        margin-left: 2px;
+    }
+
+    /* Inputs y Textareas */
+    input.form-control-modern,
+    textarea.form-control-modern {
+        height: 42px !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 8px !important;
+        padding: 8px 14px !important;
+        font-size: 13.5px !important;
+        color: #0f172a !important;
+        background-color: #ffffff !important;
+        width: 100% !important;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02) !important;
+        transition: all 0.15s ease !important;
+        outline: none !important;
+    }
+
+    input.form-control-modern:hover,
+    textarea.form-control-modern:hover,
+    select.form-control-modern:hover {
+        border-color: #94a3b8 !important;
+    }
+
+    input.form-control-modern:focus,
+    textarea.form-control-modern:focus,
+    select.form-control-modern:focus {
+        border-color: #2563eb !important;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
+        background-color: #ffffff !important;
+    }
+
+    /* ==========================================================================
+       Bootstrap-Select Modernization (Elimina el efecto caja doble / desfasado)
+       ========================================================================== */
+    .client-edit-container .bootstrap-select,
+    .client-edit-container .bootstrap-select.form-control-modern,
+    .client-edit-container .btn-group.bootstrap-select,
+    .client-edit-container div.form-control-modern {
+        width: 100% !important;
+        height: 42px !important;
+        padding: 0 !important;
+        border: none !important;
+        background: transparent !important;
+        background-color: transparent !important;
+        box-shadow: none !important;
+        margin: 0 !important;
+        display: block;
+    }
+
+    /* Ocultar cualquier botón o menú de Bootstrap-Select en los selectores con Select2 */
+    #selectorCodeudor .bootstrap-select > button,
+    #selectorCodeudor .bootstrap-select > .dropdown-menu,
+    #selectorDependeDe .bootstrap-select > button,
+    #selectorDependeDe .bootstrap-select > .dropdown-menu {
+        display: none !important;
+    }
+
+    /* El botón interno de bootstrap-select es el único que debe lucir como un input moderno */
+    .client-edit-container .bootstrap-select > .btn.dropdown-toggle,
+    .client-edit-container .bootstrap-select > .btn.btn-default,
+    .client-edit-container .bootstrap-select > button {
+        height: 42px !important;
+        width: 100% !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 8px !important;
+        background-color: #ffffff !important;
+        background-image: none !important;
+        filter: none !important;
+        color: #0f172a !important;
+        font-size: 13.5px !important;
+        font-weight: 500 !important;
+        padding: 8px 36px 8px 14px !important;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        outline: none !important;
+        transition: all 0.15s ease !important;
+        position: relative !important;
+        text-shadow: none !important;
+    }
+
+    .client-edit-container .bootstrap-select > .btn.dropdown-toggle:hover,
+    .client-edit-container .bootstrap-select > .btn.btn-default:hover,
+    .client-edit-container .bootstrap-select > button:hover {
+        border-color: #94a3b8 !important;
+        background-color: #f8fafc !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+    }
+
+    .client-edit-container .bootstrap-select.open > .btn.dropdown-toggle,
+    .client-edit-container .bootstrap-select > .btn.dropdown-toggle:focus,
+    .client-edit-container .bootstrap-select > .btn.dropdown-toggle:active,
+    .client-edit-container .bootstrap-select > button:focus,
+    .client-edit-container .bootstrap-select > button:active {
+        border-color: #2563eb !important;
+        background-color: #ffffff !important;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
+        outline: none !important;
+    }
+
+    .client-edit-container .bootstrap-select .filter-option {
+        font-size: 13.5px !important;
+        color: #0f172a !important;
+        font-weight: 500 !important;
+        text-align: left !important;
+        line-height: 24px !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    .client-edit-container .bootstrap-select .bs-caret {
+        position: absolute !important;
+        right: 14px !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        margin: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    .client-edit-container .bootstrap-select .bs-caret .caret {
+        border: none !important;
+        width: 16px !important;
+        height: 16px !important;
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'%3e%3cpath d='M7 8l3 3 3-3' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3e%3c/svg%3e") !important;
+        background-repeat: no-repeat !important;
+        background-position: center !important;
+        background-size: 16px 16px !important;
+        display: inline-block !important;
+        margin: 0 !important;
+        transition: transform 0.15s ease !important;
+    }
+
+    .client-edit-container .bootstrap-select.open .bs-caret .caret {
+        transform: rotate(180deg) !important;
+    }
+
+    .client-edit-container .bootstrap-select .dropdown-menu {
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 8px !important;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05) !important;
+        padding: 6px !important;
+        margin-top: 4px !important;
+        z-index: 1050 !important;
+        max-height: 280px !important;
+        background-color: #ffffff !important;
+    }
+
+    .client-edit-container .bootstrap-select .dropdown-menu > li > a {
+        padding: 8px 14px !important;
+        border-radius: 6px !important;
+        font-size: 13.5px !important;
+        color: #1e293b !important;
+        transition: all 0.1s ease !important;
+    }
+
+    .client-edit-container .bootstrap-select .dropdown-menu > li > a:hover,
+    .client-edit-container .bootstrap-select .dropdown-menu > li.active > a,
+    .client-edit-container .bootstrap-select .dropdown-menu > li.selected > a {
+        background-color: #eff6ff !important;
+        color: #1d4ed8 !important;
+        font-weight: 600 !important;
+    }
+
+    .client-edit-container .bootstrap-select .bs-searchbox {
+        padding: 6px 8px !important;
+    }
+
+    .client-edit-container .bootstrap-select .bs-searchbox .form-control {
+        height: 36px !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 6px !important;
+        padding: 6px 12px !important;
+        font-size: 13px !important;
+        box-shadow: none !important;
+    }
+
+    .client-edit-container .bootstrap-select .bs-searchbox .form-control:focus {
+        border-color: #2563eb !important;
+        box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15) !important;
+    }
+
+    /* Selects Nativos (Fallback si bootstrap-select no aplica) */
+    select.form-control-modern {
+        height: 42px !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 8px !important;
+        padding: 8px 36px 8px 14px !important;
+        font-size: 13.5px !important;
+        color: #0f172a !important;
+        background-color: #ffffff !important;
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'%3e%3cpath d='M7 8l3 3 3-3' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3e%3c/svg%3e") !important;
+        background-repeat: no-repeat !important;
+        background-position: right 14px center !important;
+        background-size: 16px 16px !important;
+        appearance: none !important;
+        -webkit-appearance: none !important;
+        -moz-appearance: none !important;
+        cursor: pointer !important;
+        width: 100% !important;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02) !important;
+        transition: all 0.15s ease !important;
+        line-height: normal !important;
+    }
+
+    select.form-control-modern option {
+        background-color: #ffffff !important;
+        color: #0f172a !important;
+        padding: 10px 14px !important;
+        font-size: 13.5px !important;
+    }
+
+    /* Input Icon Wrappers y Espaciado Seguro */
+    .input-icon-wrapper {
+        position: relative !important;
+        display: block !important;
+        width: 100% !important;
+    }
+
+    .input-icon-left {
+        position: absolute !important;
+        left: 14px !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        color: #94a3b8 !important;
+        font-size: 15px !important;
+        pointer-events: none !important;
+        z-index: 2 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 18px !important;
+        height: 18px !important;
+        line-height: 1 !important;
+        transition: color 0.15s ease !important;
+    }
+
+    .input-icon-wrapper:focus-within .input-icon-left {
+        color: #2563eb !important;
+    }
+
+    /* Padding reforzado para que el texto nunca quede debajo del icono */
+    input.form-control-modern.input-with-icon,
+    .client-edit-container input.input-with-icon,
+    .input-with-icon {
+        padding-left: 42px !important;
+    }
+
+    /* Toggle Option Cards & Modern Switches */
+    .toggle-option-card {
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        background: #ffffff;
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+        transition: all 0.2s ease;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .toggle-option-card:hover {
+        border-color: #cbd5e1;
+        background-color: #f8fafc;
+    }
+
+    .toggle-option-card.is-active {
+        border-color: #93c5fd !important;
+        background-color: #eff6ff !important;
+    }
+
+    .toggle-option-left {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+
+    .toggle-icon-badge {
+        width: 42px;
+        height: 42px;
+        border-radius: 10px;
+        background-color: #f1f5f9;
+        color: #64748b;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        flex-shrink: 0;
+        transition: all 0.2s ease;
+    }
+
+    .toggle-option-card.is-active .toggle-icon-badge {
+        background-color: #dbeafe !important;
+        color: #1d4ed8 !important;
+    }
+
+    .toggle-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #0f172a;
+        margin: 0 0 3px 0;
+    }
+
+    .toggle-description {
+        font-size: 12px;
+        color: #64748b;
+        margin: 0;
+    }
+
+    /* Switch Container & Track */
+    .modern-switch-wrapper {
+        position: relative !important;
+        display: inline-block !important;
+        width: 48px !important;
+        height: 26px !important;
+        flex-shrink: 0 !important;
+        vertical-align: middle !important;
+        cursor: pointer !important;
+    }
+
+    /* El checkbox nativo cubre exactamente el área del switch interactivo con z-index alto */
+    .modern-switch-input {
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 48px !important;
+        height: 26px !important;
+        opacity: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        cursor: pointer !important;
+        z-index: 10 !important;
+        display: block !important;
+    }
+
+    .modern-switch-wrapper input[type="hidden"] {
+        display: none !important;
+    }
+
+    .modern-switch-track {
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        background-color: #cbd5e1 !important;
+        border-radius: 13px !important;
+        transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        pointer-events: none !important;
+        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08) !important;
+        display: block !important;
+    }
+
+    .modern-switch-thumb {
+        position: absolute !important;
+        top: 3px !important;
+        left: 3px !important;
+        width: 20px !important;
+        height: 20px !important;
+        background-color: #ffffff !important;
+        border-radius: 50% !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.15) !important;
+        transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        display: block !important;
+    }
+
+    /* Estados Activos del Switch */
+    .modern-switch-input:checked ~ .modern-switch-track,
+    .toggle-option-card.is-active .modern-switch-track {
+        background-color: #2563eb !important;
+    }
+
+    .modern-switch-input:checked ~ .modern-switch-track .modern-switch-thumb,
+    .toggle-option-card.is-active .modern-switch-thumb {
+        transform: translateX(22px) !important;
+    }
+
+    /* Referencias Twin Cards */
+    .reference-card {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
+    }
+
+    .reference-card-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .reference-badge {
+        background: #e2e8f0;
+        color: #334155;
+        font-weight: 700;
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 4px;
+        text-transform: uppercase;
+    }
+
+    /* Fixed Sticky Footer Actions */
+    .client-sticky-footer {
+        position: fixed;
+        bottom: 0;
+        left: 265px;
+        right: 0;
+        background: #ffffff;
+        border-top: 1px solid #e2e8f0;
+        padding: 14px 32px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.05);
+        z-index: 1000;
+        transition: left 0.3s ease;
+    }
+
+    .sidebar-collapse .client-sticky-footer {
+        left: 50px;
+    }
+
+    .footer-client-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 13px;
+        color: #475569;
+    }
+
+    .footer-client-info strong {
+        color: #0f172a;
+    }
+
+    .footer-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .btn-modern {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        height: 42px;
+        padding: 0 22px;
+        font-size: 13.5px;
+        font-weight: 600;
+        border-radius: 8px;
+        transition: all 0.15s ease;
+        text-decoration: none !important;
+        cursor: pointer;
+        border: 1px solid transparent;
+    }
+
+    .btn-modern-default {
+        background: #ffffff;
+        border-color: #cbd5e1;
+        color: #475569;
+    }
+
+    .btn-modern-default:hover {
+        background: #f1f5f9;
+        color: #1e293b;
+    }
+
+    .btn-modern-primary {
+        background: #2563eb;
+        color: #ffffff;
+        box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);
+    }
+
+    .btn-modern-primary:hover {
+        background: #1d4ed8;
+        color: #ffffff;
+        box-shadow: 0 6px 14px rgba(37, 99, 235, 0.35);
+        transform: translateY(-1px);
+    }
+
+    .btn-modern-primary:active {
+        transform: translateY(0);
+    }
+
+    /* Style Select2 inside modern container */
+    .client-edit-container .select2-container {
+        width: 100% !important;
+        display: block !important;
+    }
+
+    .client-edit-container .select2-container--default .select2-selection--single {
+        height: 42px !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 8px !important;
+        padding: 6px 14px !important;
+        background-color: #ffffff !important;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02) !important;
+        display: flex !important;
+        align-items: center !important;
+        transition: all 0.15s ease !important;
+    }
+
+    .client-edit-container .select2-container--default .select2-selection--single:hover {
+        border-color: #94a3b8 !important;
+    }
+
+    .client-edit-container .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 28px !important;
+        color: #0f172a !important;
+        font-size: 13.5px !important;
+        font-weight: 500 !important;
+        padding-left: 0 !important;
+    }
+
+    .client-edit-container .select2-container--default .select2-selection--single .select2-selection__placeholder {
+        color: #64748b !important;
+    }
+
+    .client-edit-container .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 40px !important;
+        right: 12px !important;
+        top: 1px !important;
+    }
+
+    .client-edit-container .select2-container--default.select2-container--focus .select2-selection--single,
+    .client-edit-container .select2-container--default.select2-container--open .select2-selection--single {
+        border-color: #2563eb !important;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
+        outline: none !important;
+    }
+
+    /* Responsive */
+    @@media (max-width: 991px) {
+        .client-sticky-footer {
+            left: 0 !important;
+            padding: 12px 18px;
+        }
+        .footer-client-info {
+            display: none;
+        }
+    }
+</style>
+
+<div class="client-edit-container">
+    <form asp-action="_Create" method="post" id="formCrearCliente">
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger" style="border-radius: 10px; margin-bottom: 20px;"></div>
+
+        <!-- 1. Top Bar Navigation -->
+        <div class="client-top-bar">
+            <div class="client-breadcrumbs">
+                <a asp-action="Index"><i class="fa fa-arrow-left"></i> Volver a Clientes</a>
+                <span>/</span>
+                <span>Registro</span>
+                <span>/</span>
+                <strong style="color: #0f172a;">Nuevo Cliente</strong>
+            </div>
+            <div class="footer-actions">
+                <a asp-action="Index" class="btn-modern btn-modern-default">
+                    <i class="fa fa-times"></i> Cancelar
+                </a>
+                <button type="submit" class="btn-modern btn-modern-primary">
+                    <i class="fa fa-check"></i> Crear Cliente
+                </button>
+            </div>
+        </div>
+
+        <!-- 2. Hero Creation Summary Card -->
+        <div class="client-hero-card">
+            <div class="client-hero-main">
+                <div class="client-avatar-badge">
+                    <i class="fa fa-user-plus"></i>
+                </div>
+                <div class="client-hero-details">
+                    <h2>Nuevo Cliente</h2>
+                    <div class="client-badges-row">
+                        <span class="client-pill client-pill-info">
+                            <i class="fa fa-id-card"></i> Alta de Ficha
+                        </span>
+                        <span class="client-pill client-pill-default">
+                            <i class="fa fa-clock-o"></i> Registro en Proceso
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. Navigation Tabs -->
+        <div class="client-tabs-nav" role="tablist">
+            <a class="client-tab-link active" href="#tab-personal" role="tab">
+                <i class="fa fa-user"></i> Datos Personales
+            </a>
+            <a class="client-tab-link" href="#tab-contacto" role="tab">
+                <i class="fa fa-map-marker"></i> Contacto y Domicilio
+            </a>
+            <a class="client-tab-link" href="#tab-laboral" role="tab">
+                <i class="fa fa-briefcase"></i> Datos Laborales
+            </a>
+            <a class="client-tab-link" href="#tab-relaciones" role="tab">
+                <i class="fa fa-shield"></i> Relaciones y Estado
+            </a>
+            <a class="client-tab-link" href="#tab-referencias" role="tab">
+                <i class="fa fa-address-book-o"></i> Referencias
+            </a>
+        </div>
+
+        <!-- 4. Tab Panes Content -->
+        <div class="tab-content">
+            
+            <!-- TAB 1: DATOS PERSONALES -->
+            <div class="tab-pane active" id="tab-personal">
+                <div class="client-card-section">
+                    <div class="client-section-header">
+                        <div class="client-section-icon">
+                            <i class="fa fa-id-badge"></i>
+                        </div>
+                        <div>
+                            <h3 class="client-section-title">Identificación y Documentación</h3>
+                            <p class="client-section-subtitle">Datos oficiales del documento de identidad y registro fiscal.</p>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label asp-for="Persona.TipoDocumento" class="form-label-modern">Tipo Documento <span class="required-star">*</span></label>
+                                <select asp-items="@ViewBag.TiposDocumento" asp-for="Persona.TipoDocumento.Id" class="form-control-modern" searchable="true"></select>
+                                <span asp-validation-for="Persona.TipoDocumento" class="text-danger small"></span>
                             </div>
                         </div>
-                        <div class="row">
-                            <div class="col-md-3">
-                                <label asp-for="Persona.NroDocumento" class="control-label"></label>
-                                <input asp-for="Persona.NroDocumento" class="form-control" />
-                                <span asp-validation-for="Persona.NroDocumento" class="text-danger"></span>
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label asp-for="Persona.NroDocumento" class="form-label-modern">Número de Documento <span class="required-star">*</span></label>
+                                <div class="input-icon-wrapper">
+                                    <i class="fa fa-hashtag input-icon-left"></i>
+                                    <input asp-for="Persona.NroDocumento" class="form-control-modern input-with-icon" placeholder="Ej: 35123456" />
+                                </div>
+                                <span asp-validation-for="Persona.NroDocumento" class="text-danger small"></span>
                             </div>
-                            <div class="col-md-3">
-                                <label asp-for="Persona.Cuil" class="control-label"></label>
-                                <input asp-for="Persona.Cuil" class="form-control" />
-                                <span asp-validation-for="Persona.Cuil" class="text-danger"></span>
-                            </div>
-                            <div class="col-md-3">
-                                <label asp-for="RazonSocial" class="control-label"></label>
-                                <input asp-for="RazonSocial" class="form-control" />
-                                <span asp-validation-for="RazonSocial" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label asp-for="Persona.Cuil" class="form-label-modern">CUIL / CUIT</label>
+                                <div class="input-icon-wrapper">
+                                    <i class="fa fa-id-card-o input-icon-left"></i>
+                                    <input asp-for="Persona.Cuil" class="form-control-modern input-with-icon" placeholder="Ej: 20-35123456-9" />
+                                </div>
+                                <span asp-validation-for="Persona.Cuil" class="text-danger small"></span>
                             </div>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <div class="row">
-                            <div class="col-md-3">
-                                <label asp-for="Persona.Apellido" class="control-label"></label>
-                                <input asp-for="Persona.Apellido" class="form-control" />
-                                <span asp-validation-for="Persona.Apellido" class="text-danger"></span>
+
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label asp-for="Persona.Apellido" class="form-label-modern">Apellido <span class="required-star">*</span></label>
+                                <input asp-for="Persona.Apellido" class="form-control-modern" placeholder="Apellido del cliente" />
+                                <span asp-validation-for="Persona.Apellido" class="text-danger small"></span>
                             </div>
-                            <div class="col-md-3">
-                                <label asp-for="Persona.Nombres" class="control-label"></label>
-                                <input asp-for="Persona.Nombres" class="form-control" />
-                                <span asp-validation-for="Persona.Nombres" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label asp-for="Persona.Nombres" class="form-label-modern">Nombres <span class="required-star">*</span></label>
+                                <input asp-for="Persona.Nombres" class="form-control-modern" placeholder="Nombres del cliente" />
+                                <span asp-validation-for="Persona.Nombres" class="text-danger small"></span>
                             </div>
-                            <div class="col-md-2">
-                                <label asp-for="Persona.FechaNacimiento" class="control-label"></label>
-                                <input asp-for="Persona.FechaNacimiento" class="form-control" />
-                                <span asp-validation-for="Persona.FechaNacimiento" class="text-danger"></span>
-                            </div>
-                            <div class="col-md-2">
-                                <label asp-for="CBU" class="control-label"></label>
-                                <input asp-for="CBU" class="form-control" />
-                                <span asp-validation-for="CBU" class="text-danger"></span>
-                            </div>
-                            <div class="col-md-2">
-                                <label asp-for="NumeroCliente" class="control-label"></label>
-                                <input asp-for="NumeroCliente" class="form-control" />
-                                <span asp-validation-for="NumeroCliente" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label asp-for="RazonSocial" class="form-label-modern">Razón Social</label>
+                                <input asp-for="RazonSocial" class="form-control-modern" placeholder="Opcional / Comercio / Empresa" />
+                                <span asp-validation-for="RazonSocial" class="text-danger small"></span>
                             </div>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <div class="row">
-                            <div class="col-md-2">
-                                <label asp-for="Persona.CantidadHijos" class="control-label"></label>
-                                <input asp-for="Persona.CantidadHijos" class="form-control" />
-                                <span asp-validation-for="Persona.CantidadHijos" class="text-danger"></span>
+
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label asp-for="Persona.FechaNacimiento" class="form-label-modern">Fecha de Nacimiento</label>
+                                <input asp-for="Persona.FechaNacimiento" type="date" class="form-control-modern" />
+                                <span asp-validation-for="Persona.FechaNacimiento" class="text-danger small"></span>
                             </div>
-                            <div class="col-md-3">
-                                <label asp-for="Usuario.Mail" class="control-label"></label>
-                                <input asp-for="Usuario.Mail" class="form-control" />
-                                <span asp-validation-for="Usuario.Mail" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label asp-for="Persona.Pais" class="form-label-modern">País de Origen <span class="required-star">*</span></label>
+                                <select asp-items="@ViewBag.Paises" asp-for="Persona.Pais.Id" class="form-control-modern" searchable="true"></select>
+                                <span asp-validation-for="Persona.Pais" class="text-danger small"></span>
                             </div>
-                            <div class="col-md-2">
-                                <label asp-for="Telefono" class="control-label"></label>
-                                <input asp-for="Telefono" class="form-control" />
-                                <span asp-validation-for="Telefono" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label asp-for="Persona.CantidadHijos" class="form-label-modern">Cantidad de Hijos</label>
+                                <input asp-for="Persona.CantidadHijos" type="number" min="0" class="form-control-modern" placeholder="0" />
+                                <span asp-validation-for="Persona.CantidadHijos" class="text-danger small"></span>
                             </div>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <div class="row">
-                            <div class="col-md-3">
-                                <label asp-for="Provincia" class="control-label"></label>
-                                <select asp-items="@ViewBag.Provincias" asp-for="Provincia.Id" class="form-control" searchable="true"></select>
-                                <span asp-validation-for="Provincia.Id" class="text-danger"></span>
+                </div>
+            </div>
+
+            <!-- TAB 2: CONTACTO Y DOMICILIO -->
+            <div class="tab-pane" id="tab-contacto">
+                <div class="client-card-section">
+                    <div class="client-section-header">
+                        <div class="client-section-icon">
+                            <i class="fa fa-phone"></i>
+                        </div>
+                        <div>
+                            <h3 class="client-section-title">Canales de Contacto</h3>
+                            <p class="client-section-subtitle">Medios de comunicación directos para notificaciones y alertas.</p>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label asp-for="Usuario.Mail" class="form-label-modern">Correo Electrónico (Email)</label>
+                                <div class="input-icon-wrapper">
+                                    <i class="fa fa-envelope-o input-icon-left"></i>
+                                    <input asp-for="Usuario.Mail" type="email" class="form-control-modern input-with-icon" placeholder="correo@ejemplo.com" />
+                                </div>
+                                <span asp-validation-for="Usuario.Mail" class="text-danger small"></span>
                             </div>
-                            <div class="col-md-3">
-                                <label asp-for="Localidad" class="control-label"></label>
-                                <select asp-items="@ViewBag.Localidades" asp-for="Localidad.Id" class="form-control" searchable="true"></select>
-                                <span asp-validation-for="Localidad.Id" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label asp-for="Celular" class="form-label-modern">Teléfono Celular / WhatsApp</label>
+                                <div class="input-icon-wrapper">
+                                    <i class="fa fa-mobile input-icon-left" style="font-size: 18px;"></i>
+                                    <input asp-for="Celular" class="form-control-modern input-with-icon" placeholder="Ej: 11 4455 6677" />
+                                </div>
+                                <span asp-validation-for="Celular" class="text-danger small"></span>
                             </div>
-                            <div class="col-md-3">
-                                <label asp-for="Domicilio" class="control-label"></label>
-                                <input asp-for="Domicilio" class="form-control" />
-                                <span asp-validation-for="Domicilio" class="text-danger"></span>
-                            </div>
-                            <div class="col-md-3">
-                                <label asp-for="CodigoPostal" class="control-label"></label>
-                                <input asp-for="CodigoPostal" class="form-control" />
-                                <span asp-validation-for="CodigoPostal" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label asp-for="Telefono" class="form-label-modern">Teléfono Fijo / Alternativo</label>
+                                <div class="input-icon-wrapper">
+                                    <i class="fa fa-phone input-icon-left"></i>
+                                    <input asp-for="Telefono" class="form-control-modern input-with-icon" placeholder="Ej: 011 4567 8900" />
+                                </div>
+                                <span asp-validation-for="Telefono" class="text-danger small"></span>
                             </div>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <div class="row">
-                            <div class="col-md-2">
-                                <label asp-for="Celular" class="control-label"></label>
-                                <input asp-for="Celular" class="form-control" />
-                                <span asp-validation-for="Celular" class="text-danger"></span>
+                </div>
+
+                <div class="client-card-section">
+                    <div class="client-section-header">
+                        <div class="client-section-icon">
+                            <i class="fa fa-map-marker"></i>
+                        </div>
+                        <div>
+                            <h3 class="client-section-title">Dirección y Residencia</h3>
+                            <p class="client-section-subtitle">Ubicación geográfica declarada por el cliente.</p>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group-modern">
+                                <label asp-for="Provincia" class="form-label-modern">Provincia</label>
+                                <select asp-items="@ViewBag.Provincias" asp-for="Provincia.Id" class="form-control-modern" searchable="true"></select>
+                                <span asp-validation-for="Provincia.Id" class="text-danger small"></span>
                             </div>
-                            <div class="col-md-3">
-                                <div class="form-group" id="selectorCodeudor">
-                                    <label asp-for="Codeudor" class="control-label"></label>
-                                    <select id="CodeudorSelect" name="Codeudor.Id"></select>
-                                    <span asp-validation-for="Codeudor" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group-modern">
+                                <label asp-for="Localidad" class="form-label-modern">Localidad</label>
+                                <select asp-items="@ViewBag.Localidades" asp-for="Localidad.Id" class="form-control-modern" searchable="true"></select>
+                                <span asp-validation-for="Localidad.Id" class="text-danger small"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="form-group-modern">
+                                <label asp-for="Domicilio" class="form-label-modern">Calle, Número, Piso y Departamento</label>
+                                <div class="input-icon-wrapper">
+                                    <i class="fa fa-home input-icon-left"></i>
+                                    <input asp-for="Domicilio" class="form-control-modern input-with-icon" placeholder="Ej: Av. San Martín 1234 3° B" />
+                                </div>
+                                <span asp-validation-for="Domicilio" class="text-danger small"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label asp-for="CodigoPostal" class="form-label-modern">Código Postal (CP)</label>
+                                <input asp-for="CodigoPostal" class="form-control-modern" placeholder="Ej: 1425" />
+                                <span asp-validation-for="CodigoPostal" class="text-danger small"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: DATOS LABORALES E INSTITUCIONALES -->
+            <div class="tab-pane" id="tab-laboral">
+                <div class="client-card-section">
+                    <div class="client-section-header">
+                        <div class="client-section-icon">
+                            <i class="fa fa-building"></i>
+                        </div>
+                        <div>
+                            <h3 class="client-section-title">Vínculo Institucional y Clasificación</h3>
+                            <p class="client-section-subtitle">Asignación de empresa, tipología y número de cuenta.</p>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label asp-for="Empresa" class="form-label-modern">Empresa Asignada <span class="required-star">*</span></label>
+                                <select asp-items="@ViewBag.Empresa" asp-for="Empresa.Id" class="form-control-modern" searchable="true"></select>
+                                <span asp-validation-for="Empresa" class="text-danger small"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label asp-for="TipoCliente" class="form-label-modern">Tipo de Cliente <span class="required-star">*</span></label>
+                                <select asp-items="@ViewBag.TiposClientes" asp-for="TipoCliente.Id" class="form-control-modern" searchable="true"></select>
+                                <span asp-validation-for="TipoCliente" class="text-danger small"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label asp-for="NumeroCliente" class="form-label-modern">Número de Cliente / Cuenta</label>
+                                <div class="input-icon-wrapper">
+                                    <i class="fa fa-barcode input-icon-left"></i>
+                                    <input asp-for="NumeroCliente" class="form-control-modern input-with-icon" placeholder="N° identificador" />
+                                </div>
+                                <span asp-validation-for="NumeroCliente" class="text-danger small"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group-modern">
+                                <label asp-for="CBU" class="form-label-modern">Clave Bancaria Uniforme (CBU)</label>
+                                <div class="input-icon-wrapper">
+                                    <i class="fa fa-university input-icon-left"></i>
+                                    <input asp-for="CBU" class="form-control-modern input-with-icon" placeholder="22 dígitos bancarios" maxlength="22" />
+                                </div>
+                                <span asp-validation-for="CBU" class="text-danger small"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group-modern">
+                                <label asp-for="FechaIngreso" class="form-label-modern">Fecha de Ingreso al Sistema</label>
+                                <input asp-for="FechaIngreso" type="date" class="form-control-modern" value="@fechaHoy" />
+                                <span asp-validation-for="FechaIngreso" class="text-danger small"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="client-card-section">
+                    <div class="client-section-header">
+                        <div class="client-section-icon">
+                            <i class="fa fa-briefcase"></i>
+                        </div>
+                        <div>
+                            <h3 class="client-section-title">Detalles del Puesto Laboral</h3>
+                            <p class="client-section-subtitle">Información del legajo laboral y funciones asignadas.</p>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label asp-for="FechaIngresoLaboral" class="form-label-modern">Fecha de Ingreso Laboral</label>
+                                <input asp-for="FechaIngresoLaboral" type="date" class="form-control-modern" />
+                                <span asp-validation-for="FechaIngresoLaboral" class="text-danger small"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label asp-for="NumeroLegajoLaboral" class="form-label-modern">Número de Legajo Laboral</label>
+                                <input asp-for="NumeroLegajoLaboral" class="form-control-modern" placeholder="Ej: L-4819" />
+                                <span asp-validation-for="NumeroLegajoLaboral" class="text-danger small"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label asp-for="NumeroAsociado" class="form-label-modern">Número de Asociado</label>
+                                <input asp-for="NumeroAsociado" type="number" class="form-control-modern" placeholder="0" />
+                                <span asp-validation-for="NumeroAsociado" class="text-danger small"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group-modern">
+                                <label asp-for="CategoriaLaboral" class="form-label-modern">Categoría Laboral</label>
+                                <input asp-for="CategoriaLaboral" class="form-control-modern" placeholder="Ej: Operario, Administrativo, Oficial" />
+                                <span asp-validation-for="CategoriaLaboral" class="text-danger small"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group-modern">
+                                <label asp-for="DestinoLaboral" class="form-label-modern">Destino / Sucursal Laboral</label>
+                                <input asp-for="DestinoLaboral" class="form-control-modern" placeholder="Ej: Planta Central, Sucursal Norte" />
+                                <span asp-validation-for="DestinoLaboral" class="text-danger small"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 4: RELACIONES Y ESTADO -->
+            <div class="tab-pane" id="tab-relaciones">
+                <div class="client-card-section">
+                    <div class="client-section-header">
+                        <div class="client-section-icon">
+                            <i class="fa fa-users"></i>
+                        </div>
+                        <div>
+                            <h3 class="client-section-title">Relaciones y Vinculaciones</h3>
+                            <p class="client-section-subtitle">Asignación de garantes, codeudores o dependencia familiar.</p>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group-modern" id="selectorCodeudor">
+                                <label asp-for="Codeudor" class="form-label-modern">Codeudor Garante</label>
+                                <select id="CodeudorSelect" name="Codeudor.Id" style="width: 100%;"></select>
+                                <span asp-validation-for="Codeudor" class="text-danger small"></span>
+                                <small class="text-muted" style="display:block; margin-top: 4px;">Escriba al menos 3 letras para buscar por nombre o apellido.</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group-modern" id="selectorDependeDe">
+                                <label asp-for="DependeDe" class="form-label-modern">Depende De (Titular Familiar)</label>
+                                <select id="DependeDeSelect" name="DependeDe.Id" style="width: 100%;"></select>
+                                <span asp-validation-for="DependeDe" class="text-danger small"></span>
+                                <small class="text-muted" style="display:block; margin-top: 4px;">Escriba al menos 3 letras para buscar por nombre o apellido.</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="client-card-section">
+                    <div class="client-section-header">
+                        <div class="client-section-icon">
+                            <i class="fa fa-check-square-o"></i>
+                        </div>
+                        <div>
+                            <h3 class="client-section-title">Declaraciones Juradas y Preferencias</h3>
+                            <p class="client-section-subtitle">Condiciones especiales de cumplimiento normativo y consentimientos.</p>
+                        </div>
+                    </div>
+
+                    <!-- Toggle PEP -->
+                    <div class="toggle-option-card">
+                        <div class="toggle-option-left">
+                            <div class="toggle-icon-badge">
+                                <i class="fa fa-balance-scale"></i>
+                            </div>
+                            <div>
+                                <h4 class="toggle-title">Persona Políticamente Expuesta (PEP)</h4>
+                                <p class="toggle-description">Declara si el cliente desempeña o desempeñó cargos públicos o de relevancia estatal.</p>
+                            </div>
+                        </div>
+                        <div class="modern-switch-wrapper">
+                            <input type="checkbox" asp-for="PersonaPoliticamenteExpuesta" id="pepSwitch" class="modern-switch-input" />
+                            <span class="modern-switch-track">
+                                <span class="modern-switch-thumb"></span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Toggle Militar -->
+                    <div class="toggle-option-card">
+                        <div class="toggle-option-left">
+                            <div class="toggle-icon-badge">
+                                <i class="fa fa-shield"></i>
+                            </div>
+                            <div>
+                                <h4 class="toggle-title">Personal Militar</h4>
+                                <p class="toggle-description">Indica si el titular presta servicios activos en las fuerzas armadas o de seguridad.</p>
+                            </div>
+                        </div>
+                        <div class="modern-switch-wrapper">
+                            <input type="checkbox" asp-for="EsMilitar" id="militarSwitch" class="modern-switch-input" />
+                            <span class="modern-switch-track">
+                                <span class="modern-switch-thumb"></span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Toggle Publicidad -->
+                    <div class="toggle-option-card">
+                        <div class="toggle-option-left">
+                            <div class="toggle-icon-badge">
+                                <i class="fa fa-bullhorn"></i>
+                            </div>
+                            <div>
+                                <h4 class="toggle-title">Recepción de Publicidad y Novedades</h4>
+                                <p class="toggle-description">Acepta recibir comunicaciones comerciales, beneficios exclusivos y avisos de la mutual.</p>
+                            </div>
+                        </div>
+                        <div class="modern-switch-wrapper">
+                            <input type="checkbox" asp-for="RecibirPublicidad" id="publicidadSwitch" class="modern-switch-input" />
+                            <span class="modern-switch-track">
+                                <span class="modern-switch-thumb"></span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 5: REFERENCIAS PERSONALES -->
+            <div class="tab-pane" id="tab-referencias">
+                <div class="client-card-section">
+                    <div class="client-section-header">
+                        <div class="client-section-icon">
+                            <i class="fa fa-address-book"></i>
+                        </div>
+                        <div>
+                            <h3 class="client-section-title">Referencias de Contacto Declaradas</h3>
+                            <p class="client-section-subtitle">Personas allegadas para verificación de antecedentes o localización de emergencia.</p>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <!-- Referencia A -->
+                        <div class="col-md-6">
+                            <div class="reference-card">
+                                <div class="reference-card-header">
+                                    <span class="reference-badge">Referencia 1</span>
+                                    <strong style="color: #0f172a; font-size: 14px;">Contacto Principal</strong>
+                                </div>
+
+                                <div class="form-group-modern">
+                                    <label asp-for="ReferenciaA.NombreCompleto" class="form-label-modern">Nombre y Apellido</label>
+                                    <div class="input-icon-wrapper">
+                                        <i class="fa fa-user-o input-icon-left"></i>
+                                        <input asp-for="ReferenciaA.NombreCompleto" class="form-control-modern input-with-icon" placeholder="Nombre completo" />
+                                    </div>
+                                    <span asp-validation-for="ReferenciaA.NombreCompleto" class="text-danger small"></span>
+                                </div>
+
+                                <div class="form-group-modern">
+                                    <label asp-for="ReferenciaA.Vinculo" class="form-label-modern">Vínculo / Parentesco</label>
+                                    <div class="input-icon-wrapper">
+                                        <i class="fa fa-link input-icon-left"></i>
+                                        <input asp-for="ReferenciaA.Vinculo" class="form-control-modern input-with-icon" placeholder="Ej: Hermano, Cónyuge, Amigo" />
+                                    </div>
+                                    <span asp-validation-for="ReferenciaA.Vinculo" class="text-danger small"></span>
+                                </div>
+
+                                <div class="form-group-modern" style="margin-bottom: 0;">
+                                    <label asp-for="ReferenciaA.Telefono" class="form-label-modern">Teléfono de Contacto</label>
+                                    <div class="input-icon-wrapper">
+                                        <i class="fa fa-phone input-icon-left"></i>
+                                        <input asp-for="ReferenciaA.Telefono" class="form-control-modern input-with-icon" placeholder="Ej: 11 4455 6677" />
+                                    </div>
+                                    <span asp-validation-for="ReferenciaA.Telefono" class="text-danger small"></span>
                                 </div>
                             </div>
-                            <div class="col-md-3">
-                                <div class="form-group" id="selectorDependeDe">
-                                    <label asp-for="DependeDe" class="control-label"></label>
-                                    <select id="DependeDeSelect" name="Depende.Id"></select>
-                                    <span asp-validation-for="DependeDe" class="text-danger"></span>
+                        </div>
+
+                        <!-- Referencia B -->
+                        <div class="col-md-6">
+                            <div class="reference-card">
+                                <div class="reference-card-header">
+                                    <span class="reference-badge">Referencia 2</span>
+                                    <strong style="color: #0f172a; font-size: 14px;">Contacto Secundario</strong>
+                                </div>
+
+                                <div class="form-group-modern">
+                                    <label asp-for="ReferenciaB.NombreCompleto" class="form-label-modern">Nombre y Apellido</label>
+                                    <div class="input-icon-wrapper">
+                                        <i class="fa fa-user-o input-icon-left"></i>
+                                        <input asp-for="ReferenciaB.NombreCompleto" class="form-control-modern input-with-icon" placeholder="Nombre completo" />
+                                    </div>
+                                    <span asp-validation-for="ReferenciaB.NombreCompleto" class="text-danger small"></span>
+                                </div>
+
+                                <div class="form-group-modern">
+                                    <label asp-for="ReferenciaB.Vinculo" class="form-label-modern">Vínculo / Parentesco</label>
+                                    <div class="input-icon-wrapper">
+                                        <i class="fa fa-link input-icon-left"></i>
+                                        <input asp-for="ReferenciaB.Vinculo" class="form-control-modern input-with-icon" placeholder="Ej: Compañero de trabajo, Tío" />
+                                    </div>
+                                    <span asp-validation-for="ReferenciaB.Vinculo" class="text-danger small"></span>
+                                </div>
+
+                                <div class="form-group-modern" style="margin-bottom: 0;">
+                                    <label asp-for="ReferenciaB.Telefono" class="form-label-modern">Teléfono de Contacto</label>
+                                    <div class="input-icon-wrapper">
+                                        <i class="fa fa-phone input-icon-left"></i>
+                                        <input asp-for="ReferenciaB.Telefono" class="form-control-modern input-with-icon" placeholder="Ej: 11 5566 7788" />
+                                    </div>
+                                    <span asp-validation-for="ReferenciaB.Telefono" class="text-danger small"></span>
                                 </div>
                             </div>
-                            <div class="col-md-3">
-                                <br /><label asp-for="RecibirPublicidad" class="control-label"></label>
-                                <input type="checkbox" asp-for="RecibirPublicidad" class="form-control" />
-                            </div>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <div class="row">
-                            <div class="col-md-3">
-                                <label asp-for="Empresa" class="control-label"></label>
-                                <select asp-items="@ViewBag.Empresa" asp-for="Empresa.Id" class="form-control" searchable="true"></select>
-                                <span asp-validation-for="Empresa" class="text-danger"></span>
-                            </div>
-                            <div class="col-md-2">
-                                <label asp-for="FechaIngresoLaboral" class="control-label"></label>
-                                <input asp-for="FechaIngresoLaboral" class="form-control" />
-                                <span asp-validation-for="FechaIngresoLaboral" class="text-danger"></span>
-                            </div>
-                            <div class="col-md-2">
-                                <label asp-for="NumeroLegajoLaboral" class="control-label"></label>
-                                <input asp-for="NumeroLegajoLaboral" class="form-control" />
-                                <span asp-validation-for="NumeroLegajoLaboral" class="text-danger"></span>
-                            </div>
-                            <div class="col-md-2">
-                                <label asp-for="NumeroAsociado" class="control-label"></label>
-                                <input asp-for="NumeroAsociado" class="form-control" />
-                                <span asp-validation-for="NumeroAsociado" class="text-danger"></span>
-                            </div>
-                            <div class="col-md-3">
-                                <label asp-for="DestinoLaboral" class="control-label"></label>
-                                <input asp-for="DestinoLaboral" class="form-control" />
-                                <span asp-validation-for="DestinoLaboral" class="text-danger"></span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <div class="row">
-                            <div class="col-md-2">
-                                <label asp-for="CategoriaLaboral" class="control-label"></label>
-                                <input asp-for="CategoriaLaboral" class="form-control" />
-                                <span asp-validation-for="CategoriaLaboral" class="text-danger"></span>
-                            </div>
-                            <div class="col-md-2">
-                                <label asp-for="FechaIngreso" class="control-label"></label>
-                                <input asp-for="FechaIngreso" class="form-control" />
-                                <span asp-validation-for="FechaIngreso" class="text-danger"></span>
-                            </div>
-                            <div class="col-md-3">
-                                <br /><label asp-for="PersonaPoliticamenteExpuesta" class="control-label"></label>
-                                <input type="checkbox" asp-for="PersonaPoliticamenteExpuesta" class="form-control" />
-                            </div>
-                            <div class="col-md-2">
-                                <br /><label asp-for="EsMilitar" class="control-label"></label>
-                                <input type="checkbox" asp-for="EsMilitar" class="form-control" />
-                            </div>
-                        </div>
-                    </div>
-                    <hr>
-                    <div class="form-group">
-                        <label asp-for="ReferenciaA" class="control-label"></label>
-                        <div class="row">
-                            <div class="col-md-4">
-                                <label asp-for="ReferenciaA.NombreCompleto" class="control-label"></label>
-                                <input asp-for="ReferenciaA.NombreCompleto" class="form-control" />
-                                <span asp-validation-for="ReferenciaA.NombreCompleto" class="text-danger"></span>
-                            </div>
-                            <div class="col-md-3">
-                                <label asp-for="ReferenciaA.Vinculo" class="control-label"></label>
-                                <input asp-for="ReferenciaA.Vinculo" class="form-control" />
-                                <span asp-validation-for="ReferenciaA.Vinculo" class="text-danger"></span>
-                            </div>
-                            <div class="col-md-3">
-                                <label asp-for="ReferenciaA.Telefono" class="control-label"></label>
-                                <input asp-for="ReferenciaA.Telefono" class="form-control" />
-                                <span asp-validation-for="ReferenciaA.Telefono" class="text-danger"></span>
-                            </div>
-                        </div>
-                        <hr>
-                        <label asp-for="ReferenciaB" class="control-label"></label>
-                        <div class="row">
-                            <div class="col-md-4">
-                                <label asp-for="ReferenciaB.NombreCompleto" class="control-label"></label>
-                                <input asp-for="ReferenciaB.NombreCompleto" class="form-control" />
-                                <span asp-validation-for="ReferenciaB.NombreCompleto" class="text-danger"></span>
-                            </div>
-                            <div class="col-md-3">
-                                <label asp-for="ReferenciaB.Vinculo" class="control-label"></label>
-                                <input asp-for="ReferenciaB.Vinculo" class="form-control" />
-                                <span asp-validation-for="ReferenciaB.Vinculo" class="text-danger"></span>
-                            </div>
-                            <div class="col-md-3">
-                                <label asp-for="ReferenciaB.Telefono" class="control-label"></label>
-                                <input asp-for="ReferenciaB.Telefono" class="form-control" />
-                                <span asp-validation-for="ReferenciaB.Telefono" class="text-danger"></span>
-                            </div>
-                        </div>
-                    </div>
-                }
-                @using (Html.BoxFooter())
-                {
-                    <a class="btn btn-default" asp-action="Index">Cancelar</a>
-                    <input type="submit" value="Guardar" class="btn btn-primary pull-right" />
-                }
-            }
-        </form>
-    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 5. Floating / Sticky Bottom Actions Bar -->
+        <div class="client-sticky-footer">
+            <div class="footer-client-info">
+                <i class="fa fa-info-circle text-primary" style="font-size: 16px;"></i>
+                <span>Completando ficha de: <strong>Nuevo Cliente</strong></span>
+            </div>
+            <div class="footer-actions">
+                <a asp-action="Index" class="btn-modern btn-modern-default">
+                    <i class="fa fa-times"></i> Cancelar
+                </a>
+                <button type="submit" class="btn-modern btn-modern-primary">
+                    <i class="fa fa-check"></i> Crear Cliente
+                </button>
+            </div>
+        </div>
+    </form>
 </div>
+
 <script>
-$(document).ready(function () {
-    $('#Provincia_Id').on('change', function () {
-        $.ajax({
-            url: "/Core/Clientes/SelectLocalidades",
-            data: {
-                id: $('#Provincia_Id').val()
+    // Manejo de switches modernos y tarjetas interactivas
+    $(document).on('click', '.toggle-option-card', function (e) {
+        // Si el click fue directamente sobre el checkbox del switch, el navegador ya realiza el toggle
+        if ($(e.target).is('.modern-switch-input')) {
+            return;
+        }
+        var $checkbox = $(this).find('.modern-switch-input');
+        if ($checkbox.length) {
+            $checkbox.prop('checked', !$checkbox.prop('checked')).trigger('change');
+        }
+    });
+
+    $(document).on('change', '.modern-switch-input', function () {
+        var isChecked = this.checked;
+        $(this).closest('.toggle-option-card').toggleClass('is-active', isChecked);
+    });
+
+    $(document).ready(function () {
+        // Sincronizar estado visual de los switches según el valor cargado del modelo
+        $('.modern-switch-input').each(function () {
+            $(this).closest('.toggle-option-card').toggleClass('is-active', this.checked);
+        });
+
+        // Asegurar refresco y renderizado perfecto de bootstrap-select
+        if ($.fn.selectpicker) {
+            $('.client-edit-container select:not(#CodeudorSelect):not(#DependeDeSelect)').selectpicker('refresh');
+        }
+
+        // Cascade dinámica Provincia -> Localidad
+        $('#Provincia_Id').on('change', function () {
+            var provId = $(this).val();
+            if (!provId) return;
+
+            $.ajax({
+                url: "/Core/Clientes/SelectLocalidades",
+                data: { id: provId },
+                type: "POST",
+                success: function (data) {
+                    $('#Localidad_Id').empty().html(data);
+                    if ($.fn.selectpicker) {
+                        $('#Localidad_Id').selectpicker('refresh');
+                    }
+                }
+            });
+        });
+
+        // Limpiar cualquier envoltura o botón de bootstrap-select en los campos con Select2
+        $('#selectorCodeudor, #selectorDependeDe').each(function () {
+            var $wrapper = $(this);
+            var $select = $wrapper.find('select');
+            if ($select.parent().hasClass('bootstrap-select')) {
+                $select.siblings().remove();
+                $select.unwrap();
+            }
+            $wrapper.find('.bootstrap-select').hide();
+            $select.show();
+        });
+
+        // Inicializar Select2 para Codeudor
+        $("#CodeudorSelect").select2({
+            width: '100%',
+            language: {
+                inputTooShort: function () { return "Ingrese al menos 3 caracteres."; },
+                errorLoading: function () { return "Error al cargar los clientes."; },
+                noResults: function () { return "No se encontraron clientes."; },
+                searching: function () { return "Buscando..."; }
             },
-            type: "Post",
-            success: function (data) {
-                $('#Localidad_Id').empty();
-                $('#Localidad_Id').html(data).selectpicker('refresh');
-                $('#Localidad_Id').selectpicker('val', ['0']).selectpicker('refresh');
+            ajax: {
+                url: "/Core/Clientes/ClienteCombo",
+                dataType: 'json',
+                delay: 250,
+                data: function (params) {
+                    return {
+                        term: params.term
+                    };
+                },
+                processResults: function (data) {
+                    return { results: data };
+                }
+            },
+            placeholder: 'Seleccione un Codeudor (opcional)',
+            allowClear: true,
+            minimumInputLength: 3
+        });
+
+        // Inicializar Select2 para DependeDe
+        $("#DependeDeSelect").select2({
+            width: '100%',
+            language: {
+                inputTooShort: function () { return "Ingrese al menos 3 caracteres."; },
+                errorLoading: function () { return "Error al cargar los clientes."; },
+                noResults: function () { return "No se encontraron clientes."; },
+                searching: function () { return "Buscando..."; }
+            },
+            ajax: {
+                url: "/Core/Clientes/ClienteCombo",
+                dataType: 'json',
+                delay: 250,
+                data: function (params) {
+                    return {
+                        term: params.term
+                    };
+                },
+                processResults: function (data) {
+                    return { results: data };
+                }
+            },
+            placeholder: 'Seleccione el Titular (opcional)',
+            allowClear: true,
+            minimumInputLength: 3
+        });
+
+        // Ocultar cualquier botón residual de bootstrap-select
+        $("#selectorCodeudor .bootstrap-select, #selectorDependeDe .bootstrap-select").hide();
+
+        // Cambiar pestañas suavemente y mantener la pestaña activa
+        $('.client-tab-link').on('click', function (e) {
+            e.preventDefault();
+            $('.client-tab-link').removeClass('active');
+            $(this).addClass('active');
+            var target = $(this).attr('href');
+            $('.tab-content .tab-pane').removeClass('active');
+            $(target).addClass('active');
+
+            if (target === '#tab-relaciones') {
+                $('#CodeudorSelect, #DependeDeSelect').trigger('change.select2');
             }
         });
+
+        // Si hay errores de validación, activar automáticamente la pestaña que contenga el campo con error
+        $('#formCrearCliente').on('submit', function () {
+            setTimeout(function () {
+                var firstError = $('.field-validation-error, .input-validation-error').first();
+                if (firstError.length) {
+                    var tabPane = firstError.closest('.tab-pane');
+                    if (tabPane.length) {
+                        var tabId = tabPane.attr('id');
+                        $('.client-tab-link[href="#' + tabId + '"]').trigger('click');
+                        firstError.focus();
+                    }
+                }
+            }, 100);
+        });
     });
-    $("#selectorCodeudor .bootstrap-select").hide();
-    $("#CodeudorSelect").select2({
-        language: {
-            inputTooShort: function () {
-                return "Debe ingresar como mínimo 3 caracteres.";
-            },
-            errorLoading: function () {
-                return "Hubo un error al traer los Clientes."
-            },
-            noResults: function () {
-                return 'No se encontraron Clientes.';
-            },
-            searching: function () {
-                return 'Buscando...';
-            }
-        },
-        ajax: {
-            url: "/Core/Clientes/ClienteCombo",
-            dataType: 'json',
-            data: function (params) {
-                return {
-                    term: params.term
-                };
-            },
-            processResults: function (data) {
-                return {
-                    results: data
-                };
-            },
-        },
-        placeholder: 'Ingrese un Cliente',
-        minimumInputLength: 3
-    });
-    let Codeudor = {
-        id: "@ViewBag.CodeudorId",
-        text:"@Html.Raw(ViewBag.CodeudorDescripcion)"
-    }
-    let DefaultCodeudor = new Option(Codeudor.text, Codeudor.id, true, false);
-    $("#CodeudorSelect").append(DefaultCodeudor).trigger("change");
-
-
-
-
-    $("#selectorDependeDe .bootstrap-select").hide();
-    $("#DependeDeSelect").select2({
-        language: {
-            inputTooShort: function () {
-                return "Debe ingresar como mínimo 3 caracteres.";
-            },
-            errorLoading: function () {
-                return "Hubo un error al traer los Clientes."
-            },
-            noResults: function () {
-                return 'No se encontraron Clientes.';
-            },
-            searching: function () {
-                return 'Buscando...';
-            }
-        },
-        ajax: {
-            url: "/Core/Clientes/ClienteCombo",
-            dataType: 'json',
-            data: function (params) {
-                return {
-                    term: params.term
-                };
-            },
-            processResults: function (data) {
-                return {
-                    results: data
-                };
-            },
-        },
-        placeholder: 'Ingrese un Cliente',
-        minimumInputLength: 3
-    });
-    let DependeDe = {
-        id: "@ViewBag.DependeDeId",
-        text:"@Html.Raw(ViewBag.DependeDeDescripcion)"
-    }
-    let DefaultDependeDe = new Option(DependeDe.text, DependeDe.id, true, false);
-    $("#DependeDeSelect").append(DefaultDependeDe).trigger("change");
-
-
-
-    $("#selectorUsuario .bootstrap-select").hide();
-    $("#UsuarioSelect").select2({
-        language: {
-            inputTooShort: function () {
-                return "Debe ingresar como mínimo 3 caracteres.";
-            },
-            errorLoading: function () {
-                return "Hubo un error al traer los Usuarios."
-            },
-            noResults: function () {
-                return 'No se encontraron Usuarios.';
-            },
-            searching: function () {
-                return 'Buscando...';
-            }
-        },
-        ajax: {
-            url: "/Core/Clientes/UsuarioCombo",
-            dataType: 'json',
-            data: function (params) {
-                return {
-                    term: params.term
-                };
-            },
-            processResults: function (data) {
-                return {
-                    results: data
-                };
-            },
-        },
-        placeholder: 'Ingrese un Usuario',
-        minimumInputLength: 3
-    });
-    let Usuario = {
-        id: "@ViewBag.UsuarioId",
-        text:"@Html.Raw(ViewBag.UsuarioDescripcion)"
-    }
-    let DefaultUsuario = new Option(Usuario.text, Usuario.id, true, false);
-    $("#UsuarioSelect").append(DefaultUsuario).trigger("change");
-});
 </script>

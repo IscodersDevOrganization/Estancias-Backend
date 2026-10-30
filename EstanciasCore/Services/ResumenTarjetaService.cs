@@ -4,29 +4,15 @@ using DAL.DTOs.Servicios;
 using DAL.Mobile;
 using DAL.Models;
 using DAL.Models.Core;
-using EstanciasCore.API.Controllers.Billetera;
 using EstanciasCore.Interface;
 using EstanciasCore.Services;
 using iText.Html2pdf;
-using iText.Kernel.Colors;
-using iText.Kernel.Events;
-using iText.Kernel.Font;
-using iText.Kernel.Geom;
-using iText.Kernel.Pdf;
-using iText.Kernel.Pdf.Canvas;
-using iText.Layout;
-using iText.Layout.Borders;
-using iText.Layout.Element;
-using iText.Layout.Properties;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -37,298 +23,331 @@ public class ResumenTarjetaService : IResumenTarjetaService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConfiguration _configuration;
+    private readonly ILogger<ResumenTarjetaService> _logger;
+    private readonly ColaEnvioResumenSignal _colaSignal;
 
-    public ResumenTarjetaService(IServiceScopeFactory scopeFactory, IConfiguration configuration)
+    private enum ResultadoUsuario { Generado, Fallido }
+
+    private class UsuarioPendiente
+    {
+        public UsuarioParaProcesarDTO Datos { get; set; }
+        public bool RecibirResumen { get; set; }
+    }
+
+    private class ResultadoProceso
+    {
+        public ResultadoUsuario Resultado { get; set; }
+        public bool Encolado { get; set; }
+    }
+
+    public ResumenTarjetaService(IServiceScopeFactory scopeFactory, IConfiguration configuration, ILogger<ResumenTarjetaService> logger, ColaEnvioResumenSignal colaSignal)
     {
         _scopeFactory = scopeFactory;
         _configuration = configuration;
+        _logger = logger;
+        _colaSignal = colaSignal;
     }
 
-    public async Task<bool> GenerarResumenTarjetas()
+    public async Task<ResultadoGeneracionResumen> GenerarResumenTarjetas(CancellationToken cancellationToken = default(CancellationToken))
     {
-        DatosEstructura datosEstructura = null;
-        var stopwatch = Stopwatch.StartNew();
+        var resultado = new ResultadoGeneracionResumen();
+        int? ejecucionId = null;
+
         try
         {
-            // --- 1. Configuración del Proceso ---
             var tamanoLote = _configuration.GetValue<int>("ProcesoResumen:TamanoLote", 100);
             var limiteConcurrencia = _configuration.GetValue<int>("ProcesoResumen:LimiteConcurrencia", 10);
-            var tamanoBatchGuardado = 50; // Guardamos en SQL de a 50 para ver progreso
 
-            var resumenesGenerados = new ConcurrentBag<ResumenTarjeta>();
-            var usuariosFallidos = new ConcurrentBag<(string UsuarioId, string Error)>();
-
-            // --- 2. OBTENER O CREAR EL PERIODO ACTUAL ---
+            DatosEstructura datosEstructura;
             Periodo periodo;
 
-            DateTime fechaActualPerido = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 15);
+            // --- 1. PERÍODO ACTUAL (vence el 15 de este mes) Y ALTA DE LA EJECUCIÓN ---
             using (var scope = _scopeFactory.CreateScope())
             {
                 var context = scope.ServiceProvider.GetRequiredService<EstanciasContext>();
 
-                datosEstructura = await context.DatosEstructura.FirstOrDefaultAsync();
+                datosEstructura = await context.DatosEstructura.AsNoTracking().FirstOrDefaultAsync(cancellationToken);
+                periodo = await ObtenerOCrearPeriodoAsync(context, cancellationToken);
 
-                periodo = await context.Periodo.FirstOrDefaultAsync(p => fechaActualPerido.Date.Day >= p.FechaVencimiento.Date.Day && fechaActualPerido.Date.Month <= p.FechaVencimiento.Date.Month && fechaActualPerido.Date.Year <= p.FechaVencimiento.Date.Year);
-
-                if (periodo == null)
+                var ejecucion = new EjecucionProceso
                 {
-                    var anioFechaDesde = fechaActualPerido.AddMonths(-2);
-                    var anioFechaHasta = fechaActualPerido.AddMonths(-1);
-
-                    DateTime FechaDesde = new DateTime(anioFechaDesde.Year, anioFechaDesde.Month, 26);
-                    DateTime FechaHasta = new DateTime(anioFechaHasta.Year, anioFechaHasta.Month, 25);
-                    DateTime proximoMes = fechaActualPerido.AddMonths(1);
-                    DateTime fechaDeVencimiento = new DateTime(fechaActualPerido.Year, fechaActualPerido.Month, 15);
-                    periodo = new Periodo
-                    {
-                        Descripcion = FechaHasta.ToString("MMMM yyyy", new CultureInfo("es-ES")),
-                        FechaDesde = FechaDesde,
-                        FechaHasta = FechaHasta,
-                        Activo = true,
-                        FechaVencimiento = fechaDeVencimiento
-                    };
-                    context.Add(periodo); 
-                    await context.SaveChangesAsync();
-                }
+                    Codigo = CodigosProceso.GenerarResumen,
+                    PeriodoId = periodo.Id,
+                    FechaInicio = DateTime.Now,
+                    Estado = EstadosEjecucion.EnCurso,
+                    Servidor = Environment.MachineName
+                };
+                context.EjecucionProceso.Add(ejecucion);
+                await context.SaveChangesAsync(cancellationToken);
+                ejecucionId = ejecucion.Id;
             }
 
-            // --- 3. Obtención del Total de Usuarios (usando un scope temporal) ---
-            int totalUsuarios;
+            resultado.EjecucionId = ejecucionId;
+            resultado.PeriodoId = periodo.Id;
+
+            // --- 2. USUARIOS PENDIENTES: los que todavía no tienen resumen en este período ---
+            List<UsuarioPendiente> pendientes;
             using (var scope = _scopeFactory.CreateScope())
             {
                 var context = scope.ServiceProvider.GetRequiredService<EstanciasContext>();
-                totalUsuarios = await context.Usuarios
+                var periodoId = periodo.Id;
+                var usuariosConResumen = context.ResumenTarjeta.Where(r => r.PeriodoId == periodoId).Select(r => r.UsuarioId);
+
+                pendientes = await context.Usuarios
                     .Include(u => u.Personas)
-                    .CountAsync(u => u.Personas != null &&
-                                     !string.IsNullOrEmpty(u.Personas.NroTarjeta) &&
-                                     !string.IsNullOrEmpty(u.Personas.NroDocumento));
+                    .Where(u => u.Personas != null &&
+                                !string.IsNullOrEmpty(u.Personas.NroTarjeta) &&
+                                !string.IsNullOrEmpty(u.Personas.NroDocumento) &&
+                                !usuariosConResumen.Contains(u.Id))
+                    .OrderBy(u => u.Id)
+                    .Select(u => new UsuarioPendiente
+                    {
+                        Datos = new UsuarioParaProcesarDTO
+                        {
+                            Id = u.Id,
+                            NombreCompleto = u.Personas.GetNombreCompleto(),
+                            NroDocumento = u.Personas.NroDocumento,
+                            NroTarjeta = u.Personas.NroTarjeta,
+                            UserName = u.UserName
+                        },
+                        RecibirResumen = u.RecibirResumen
+                    })
+                    .ToListAsync(cancellationToken);
             }
 
-            if (totalUsuarios == 0)
+            resultado.Total = pendientes.Count;
+            _logger.LogInformation("Generación de resúmenes período {PeriodoId}: {Cantidad} usuarios pendientes.", periodo.Id, pendientes.Count);
+
+            if (datosEstructura == null)
             {
-                return false;
+                throw new InvalidOperationException("No se encontraron los datos de estructura (credenciales del WS) en la tabla DatosEstructura.");
             }
 
-            var totalLotes = (int)Math.Ceiling((double)totalUsuarios / tamanoLote);
-
-            // --- 3. Procesamiento en Lotes Paralelos ---
+            // --- 3. PROCESAMIENTO EN LOTES PARALELOS. CADA USUARIO SE GUARDA APENAS TERMINA ---
             using (var semaphore = new SemaphoreSlim(limiteConcurrencia))
             {
-                for (int i = 0; i < totalLotes; i++)
+                foreach (var lote in pendientes.Select((u, i) => new { u, i }).GroupBy(x => x.i / tamanoLote, x => x.u))
                 {
-                    // Obtenemos los usuarios del lote en su propio scope para mantener el contexto corto
-                    List<UsuarioParaProcesarDTO> usuariosDelLote;
-                    using (var scope = _scopeFactory.CreateScope())
-                    {
-                        var context = scope.ServiceProvider.GetRequiredService<EstanciasContext>();
-                        usuariosDelLote = await context.Usuarios
-                            .Include(u => u.Personas)
-                            .Where(u => u.Personas != null &&
-                                        !string.IsNullOrEmpty(u.Personas.NroTarjeta) &&
-                                        !string.IsNullOrEmpty(u.Personas.NroDocumento))
-                            .OrderBy(u => u.Id)
-                            .Skip(i * tamanoLote)
-                            .Take(tamanoLote)
-                            .Select(u => new UsuarioParaProcesarDTO
-                            {
-                                Id = u.Id,
-                                NombreCompleto = u.Personas.GetNombreCompleto(),
-                                NroDocumento = u.Personas.NroDocumento,
-                                NroTarjeta = u.Personas.NroTarjeta,
-                                UserName = u.UserName
-                            })
-                            .ToListAsync();
-                    }
+                    if (cancellationToken.IsCancellationRequested) break;
 
-                    // Creamos una tarea por cada usuario del lote
-                    var tasks = usuariosDelLote.Select(usuario => ProcessarUsuarioAsync(usuario, semaphore, resumenesGenerados, usuariosFallidos, datosEstructura, periodo));
-                    await Task.WhenAll(tasks);
+                    var tareas = lote.Select(u => ProcesarUsuarioAsync(u, semaphore, datosEstructura, periodo, ejecucionId.Value, cancellationToken)).ToList();
+                    var resultadosLote = await Task.WhenAll(tareas);
 
-                    // --- GUARDADO INTERMEDIO (BATCHING) ---
-                    // Si acumulamos suficientes o es el último lote, guardamos en DB
-                    if (resumenesGenerados.Count >= tamanoBatchGuardado || i == totalLotes - 1)
-                    {
-                        await GuardarProgresoEnDB(resumenesGenerados);
-                    }
+                    resultado.Generados += resultadosLote.Count(r => r.Resultado == ResultadoUsuario.Generado);
+                    resultado.Fallidos += resultadosLote.Count(r => r.Resultado == ResultadoUsuario.Fallido);
+                    resultado.Encolados += resultadosLote.Count(r => r.Resultado == ResultadoUsuario.Generado && r.Encolado);
+                    resultado.OmitidosEnvio += resultadosLote.Count(r => r.Resultado == ResultadoUsuario.Generado && !r.Encolado);
+
+                    await ActualizarEjecucionAsync(ejecucionId.Value, resultado, EstadosEjecucion.EnCurso, null);
                 }
             }
 
-            // --- 4. Guardado de Resultados ---
-            using (var scope = _scopeFactory.CreateScope())
-            {
-                var finalContext = scope.ServiceProvider.GetRequiredService<EstanciasContext>();
-                // Iniciamos un cronómetro solo para la base de datos
-                var dbStopwatch = Stopwatch.StartNew();
+            if (cancellationToken.IsCancellationRequested)
+                resultado.Estado = EstadosEjecucion.Cancelado;
+            else
+                resultado.Estado = resultado.Fallidos == 0 ? EstadosEjecucion.Completado : EstadosEjecucion.CompletadoConErrores;
 
-                // 1. Agrega los resúmenes que se generaron correctamente
-                await finalContext.AddRangeAsync(resumenesGenerados);
+            await ActualizarEjecucionAsync(ejecucionId.Value, resultado, resultado.Estado, null, finalizar: true);
 
-                // 2. Crea el objeto de log principal
-                var logProcedimiento = new LogProcedimientos()
-                {
-                    Nombre = "Generación de Resumen Tarjeta",
-                    Fecha = DateTime.Now,
-                    StatusCode = "200",
-                    RegistrosCreados = resumenesGenerados.Count(),
-                    RegistrosConErrores = usuariosFallidos.Count(),
-                    Tiempo = stopwatch.ElapsedMilliseconds,
-                };
+            _logger.LogInformation("Generación de resúmenes período {PeriodoId} terminó en {Estado}. Generados: {Generados}, Fallidos: {Fallidos}, Encolados: {Encolados}.",
+                periodo.Id, resultado.Estado, resultado.Generados, resultado.Fallidos, resultado.Encolados);
 
-                // 3. Crea la lista de logs de errores (sin asignar el Id manualmente)
-                var logErrores = usuariosFallidos.Select(x => new LogResumenesTarjetas()
-                {
-                    Fecha = DateTime.Now,
-                    Mensaje = x.Error,
-                    UsuarioId = x.UsuarioId
-                }).ToList();
-
-                // 4. ¡LA MAGIA! Asigna la colección de errores a la propiedad de navegación del log principal
-                logProcedimiento.DetalleErrores = logErrores;
-
-                // 5. Agrega el log principal al contexto. EF entenderá que también debe agregar los errores asociados.
-                await finalContext.AddAsync(logProcedimiento);
-
-                // 6. Guarda todo en UNA SOLA transacción.
-                await finalContext.SaveChangesAsync();
-                dbStopwatch.Stop();
-            }
-
-            stopwatch.Stop();
-            return true;
+            return resultado;
         }
         catch (Exception ex)
         {
-            stopwatch.Stop();
-            return false;
-        }
-    }
+            _logger.LogError(ex, "Error general en la generación de resúmenes.");
+            resultado.Estado = ex is OperationCanceledException ? EstadosEjecucion.Cancelado : EstadosEjecucion.Fallido;
+            resultado.Error = ex.Message;
 
-    private async Task GuardarProgresoEnDB(ConcurrentBag<ResumenTarjeta> resumenes)
-    {
-        if (resumenes.IsEmpty) return;
-
-        using (var scope = _scopeFactory.CreateScope())
-        {
-            var context = scope.ServiceProvider.GetRequiredService<EstanciasContext>();
-
-            // Extraemos lo que hay en la bolsa hasta ahora
-            var listaParaGuardar = new List<ResumenTarjeta>();
-            while (resumenes.TryTake(out var item)) { listaParaGuardar.Add(item); }
-
-            if (listaParaGuardar.Any())
+            if (ejecucionId.HasValue)
             {
-                await context.ResumenTarjeta.AddRangeAsync(listaParaGuardar);
-                await context.SaveChangesAsync();
-                // En este punto, los registros ya son visibles en SQL Server
+                try { await ActualizarEjecucionAsync(ejecucionId.Value, resultado, resultado.Estado, ex.ToString(), finalizar: true); }
+                catch (Exception exLog) { _logger.LogError(exLog, "No se pudo registrar el error de la ejecución {EjecucionId}.", ejecucionId); }
             }
+
+            return resultado;
         }
     }
 
-    private async Task ProcessarUsuarioAsync(UsuarioParaProcesarDTO usuario, SemaphoreSlim semaphore, ConcurrentBag<ResumenTarjeta> resumenes, ConcurrentBag<(string, string)> fallidos, DatosEstructura datosEstructura, Periodo periodo)
+    private static async Task<Periodo> ObtenerOCrearPeriodoAsync(EstanciasContext context, CancellationToken cancellationToken)
     {
+        var calculado = CalcularPeriodo(new DateTime(DateTime.Now.Year, DateTime.Now.Month, 15));
+
+        var periodo = await context.Periodo.FirstOrDefaultAsync(p => p.FechaVencimiento.Date == calculado.FechaVencimiento, cancellationToken);
+        if (periodo != null) return periodo;
+
+        context.Add(calculado);
+        await context.SaveChangesAsync(cancellationToken);
+        return calculado;
+    }
+
+    /// <summary>
+    /// Arma (sin guardar) el período que vence en fechaVencimiento: del 26 de hace dos meses al 25 del mes anterior.
+    /// Es la misma regla que usa la generación mensual al crear el período.
+    /// </summary>
+    public static Periodo CalcularPeriodo(DateTime fechaVencimiento)
+    {
+        var vencimiento = new DateTime(fechaVencimiento.Year, fechaVencimiento.Month, 15);
+        var mesDesde = vencimiento.AddMonths(-2);
+        var mesHasta = vencimiento.AddMonths(-1);
+        var fechaHasta = new DateTime(mesHasta.Year, mesHasta.Month, 25);
+
+        return new Periodo
+        {
+            Descripcion = fechaHasta.ToString("MMMM yyyy", new CultureInfo("es-ES")),
+            FechaDesde = new DateTime(mesDesde.Year, mesDesde.Month, 26),
+            FechaHasta = fechaHasta,
+            Activo = true,
+            FechaVencimiento = vencimiento
+        };
+    }
+
+    private class ResumenConstruido
+    {
+        public bool Ok { get; set; }
+        public string CodigoError { get; set; }
+        public string Mensaje { get; set; }
+        public TempalteResumenDTO Datos { get; set; }
+        public byte[] Pdf { get; set; }
+        public string NroComprobante { get; set; }
+        public DateTime FechaResumen { get; set; }
+        public string ResultadoWs { get; set; }
+    }
+
+    /// <summary>
+    /// Arma el resumen de UN usuario (WS, cuotas, punitorios y PDF) SIN guardar nada.
+    /// Lo usan la generación mensual (con fechaGeneracion = ahora, igual que siempre) y la simulación.
+    /// fechaGeneracion reemplaza a "hoy": define el mes de las cuotas y el corte de mora de los punitorios.
+    /// </summary>
+    private static async Task<ResumenConstruido> ConstruirResumenAsync(IServiceProvider serviceProvider, UsuarioParaProcesarDTO usuario, DatosEstructura datosEstructura, Periodo periodo, DateTime fechaGeneracion)
+    {
+        var numeroTarjetaLimpio = (usuario.NroTarjeta ?? "").Trim();
+        if (!long.TryParse(numeroTarjetaLimpio, out long numeroTarjetaConvertido))
+        {
+            return new ResumenConstruido { CodigoError = CodigosErrorGeneracion.TarjetaInvalida, Mensaje = $"El Nro. de Tarjeta '{numeroTarjetaLimpio}' no tiene un formato numérico válido." };
+        }
+
+        if (datosEstructura == null)
+        {
+            return new ResumenConstruido { CodigoError = CodigosErrorGeneracion.SinConfiguracion, Mensaje = "No se encontraron los datos de estructura (credenciales del WS) en la tabla DatosEstructura." };
+        }
+
+        var fechaMesActualCuotas = new DateTime(fechaGeneracion.Year, fechaGeneracion.Month, 1);
+        int diasEnMes = DateTime.DaysInMonth(fechaMesActualCuotas.Year, fechaMesActualCuotas.Month);
+        var fechaActualCuotas = new DateTime(fechaMesActualCuotas.Year, fechaMesActualCuotas.Month, diasEnMes);
+
+        var datosServices = serviceProvider.GetRequiredService<IDatosTarjetaService>();
+
+        // --- LÓGICA DE NEGOCIO ORIGINAL ---
+        var datosMovimientos = await datosServices.ConsultarMovimientos(datosEstructura.UsernameWS, datosEstructura.PasswordWS, usuario.NroDocumento, numeroTarjetaConvertido, 100, 1);
+
+        if (datosMovimientos?.Detalle == null || datosMovimientos.Detalle.Resultado != "EXITO")
+        {
+            return new ResumenConstruido
+            {
+                CodigoError = CodigosErrorGeneracion.WsSinExito,
+                ResultadoWs = datosMovimientos?.Detalle?.Resultado,
+                Mensaje = $"El WS respondió '{datosMovimientos?.Detalle?.Resultado ?? "(sin respuesta)"}': {datosMovimientos?.Detalle?.Mensaje}"
+            };
+        }
+
+        CultureInfo.CurrentCulture = new CultureInfo("es-AR");
+
+        var datosResumen = await datosServices.CuotasDetallesResumen(datosMovimientos, fechaActualCuotas);
+        var datosResumenConPunitorios = await datosServices.CalcularPunitoriosResumen(datosResumen, fechaGeneracion);
+
+        var datosParaResumenDTO = (TempalteResumenDTO)await datosServices.PrepararDatosResumen(datosMovimientos, datosResumenConPunitorios, periodo, usuario);
+        if (datosParaResumenDTO == null)
+        {
+            return new ResumenConstruido { CodigoError = CodigosErrorGeneracion.DatosNulos, Mensaje = "PrepararDatosResumen no devolvió datos para el usuario.", ResultadoWs = "EXITO" };
+        }
+
+        var html = await datosServices.RenderViewToStringAsync("ResumenBancarioTemplate", datosParaResumenDTO);
+
+        byte[] pdfBytes;
+        using (var memoryStream = new MemoryStream())
+        {
+            HtmlConverter.ConvertToPdf(html, memoryStream);
+            pdfBytes = memoryStream.ToArray();
+        }
+
+        return new ResumenConstruido
+        {
+            Ok = true,
+            ResultadoWs = "EXITO",
+            Datos = datosParaResumenDTO,
+            Pdf = pdfBytes,
+            FechaResumen = fechaMesActualCuotas,
+            NroComprobante = common.Encrypt(datosParaResumenDTO.NroDocumento, fechaMesActualCuotas.ToString("ddMMyyyy"))
+        };
+    }
+
+    private async Task<ResultadoProceso> ProcesarUsuarioAsync(UsuarioPendiente pendiente, SemaphoreSlim semaphore, DatosEstructura datosEstructura, Periodo periodo, int ejecucionId, CancellationToken cancellationToken)
+    {
+        var usuario = pendiente.Datos;
         await semaphore.WaitAsync();
         try
         {
-            var numeroTarjetaLimpio = usuario.NroTarjeta.Trim();
-
-            if (!long.TryParse(numeroTarjetaLimpio, out long numeroTarjetaConvertido))
-            {
-                var errorMsg = $"El Nro. de Tarjeta '{numeroTarjetaLimpio}' no tiene un formato numérico válido.";
-                fallidos.Add((usuario.Id, errorMsg));
-                return;
-            }
-
-            // 1. CREAMOS UN SCOPE NUEVO Y AISLADO PARA ESTA TAREA
             using (var scope = _scopeFactory.CreateScope())
             {
-                decimal MontoCuota = 0;
-                decimal MontoProximaCuota = 0;
-                decimal MontoPunitorios = 0;
-                decimal DeudaTotal = 0;
-                decimal TotalRedondeo = 0;
-                decimal MontoDisponible = 0;
-                List<MovimientoTarjetaDTO> comprasAgrupadas = new List<MovimientoTarjetaDTO>();
+                var context = scope.ServiceProvider.GetRequiredService<EstanciasContext>();
 
-                DateTime fechaMesActualCuotas = DateTime.Now;
-                fechaMesActualCuotas = new DateTime(fechaMesActualCuotas.Year, fechaMesActualCuotas.Month, 01);
-
-                int diasEnMes = DateTime.DaysInMonth(fechaMesActualCuotas.Year, fechaMesActualCuotas.Month);
-
-                if (fechaMesActualCuotas.Day > 15)
+                var construido = await ConstruirResumenAsync(scope.ServiceProvider, usuario, datosEstructura, periodo, DateTime.Now);
+                if (!construido.Ok)
                 {
-                    DateTime fechaPunitorios = new DateTime(fechaMesActualCuotas.Year, fechaMesActualCuotas.Month, diasEnMes);
-                }
-                else
-                {
-                    DateTime fechaPunitorios = new DateTime(fechaMesActualCuotas.Year, fechaMesActualCuotas.Month, 15);
+                    await RegistrarFalloAsync(usuario.Id, periodo.Id, ejecucionId, construido.CodigoError, construido.Mensaje, null);
+                    return new ResultadoProceso { Resultado = ResultadoUsuario.Fallido };
                 }
 
-                DateTime fechaActualCuotas = new DateTime(fechaMesActualCuotas.Year, fechaMesActualCuotas.Month, diasEnMes);
-
-                // 2. OBTENEMOS LOS SERVICIOS Y EL DBCONTEXT DE ESTE SCOPE
-                var scopedDatosServices = scope.ServiceProvider.GetRequiredService<IDatosTarjetaService>();
-                var scopedContext = scope.ServiceProvider.GetRequiredService<EstanciasContext>();
-
-                // 3. OBTENEMOS LOS DATOS DE CONFIGURACIÓN DENTRO DEL MISMO SCOPE
-                //    Esto es más seguro que pasarlos desde fuera.              
-
-                if (datosEstructura == null || periodo == null)
+                var resumen = new ResumenTarjeta
                 {
-                    fallidos.Add((usuario.Id, "No se encontraron datos de estructura o período válidos."));
-                    return; // Salimos si falta configuración crítica
-                }
+                    Fecha = construido.FechaResumen,
+                    FechaVencimiento = periodo.FechaVencimiento,
+                    Monto = construido.Datos.SaldoActual,
+                    MontoAdeudado = construido.Datos.SaldoPendiente,
+                    NroComprobante = construido.NroComprobante,
+                    Adjunto = construido.Pdf,
+                    PeriodoId = periodo.Id,
+                    UsuarioId = usuario.Id
+                };
 
-                // 4. EJECUTAMOS TU LÓGICA DE NEGOCIO ORIGINAL
-                var datosMovimientos = await scopedDatosServices.ConsultarMovimientos(datosEstructura.UsernameWS, datosEstructura.PasswordWS, usuario.NroDocumento, numeroTarjetaConvertido, 100, 1);
+                // --- GUARDADO ATÓMICO: resumen + estado de generación + fila en la cola de envío ---
+                var ahora = DateTime.Now;
+                context.ResumenTarjeta.Add(resumen);
 
-                if (datosMovimientos.Detalle.Resultado == "EXITO")
+                var generacion = await context.ResumenGeneracion
+                    .FirstOrDefaultAsync(g => g.PeriodoId == periodo.Id && g.UsuarioId == usuario.Id, cancellationToken);
+                if (generacion == null)
                 {
-                    CultureInfo.CurrentCulture = new CultureInfo("es-AR");
-
-                    //Monto Disponible
-                    MontoDisponible = Math.Round(Convert.ToDecimal(datosMovimientos.Detalle.MontoDisponible.Replace(".", ",")), 2);
-
-                    //Calcula Cuota del Mes
-                    var datosResumen = await scopedDatosServices.CuotasDetallesResumen(datosMovimientos, fechaActualCuotas);
-
-                    //Calculo de Punitorios
-                    var datosResumenConPunitorios = scopedDatosServices.CalcularPunitoriosResumen(datosResumen).Result;
-
-
-
-                    var datosParaResumenDTO = (TempalteResumenDTO)await scopedDatosServices.PrepararDatosResumen(datosMovimientos, datosResumenConPunitorios, periodo, usuario);
-                    if (datosParaResumenDTO == null) return;
-
-                    var html = await scopedDatosServices.RenderViewToStringAsync("ResumenBancarioTemplate", datosParaResumenDTO);
-
-                    byte[] pdfBytesPDF;
-                    using (var memoryStream = new MemoryStream())
-                    {
-                        HtmlConverter.ConvertToPdf(html, memoryStream);
-                        pdfBytesPDF = memoryStream.ToArray();
-                    }
-
-                    var codigo = common.Encrypt(datosParaResumenDTO.NroDocumento, fechaMesActualCuotas.ToString("ddMMyyyy"));
-
-                    // 5. CREAMOS EL RESUMEN USANDO IDs, NO ENTIDADES COMPLETAS
-                    var resumenTarjeta = new ResumenTarjeta
-                    {
-                        Fecha = fechaMesActualCuotas,
-                        FechaVencimiento = periodo.FechaVencimiento,
-                        Monto = datosParaResumenDTO.SaldoActual,
-                        MontoAdeudado = datosParaResumenDTO.SaldoPendiente,
-                        NroComprobante = codigo,
-                        Adjunto = pdfBytesPDF,
-                        PeriodoId = periodo.Id,
-                        UsuarioId = usuario.Id
-                    };
-                    resumenes.Add(resumenTarjeta);
+                    generacion = new ResumenGeneracion { PeriodoId = periodo.Id, UsuarioId = usuario.Id, FechaCreacion = ahora };
+                    context.ResumenGeneracion.Add(generacion);
                 }
+                generacion.EjecucionProcesoId = ejecucionId;
+                generacion.Estado = EstadosGeneracion.Generado;
+                generacion.CodigoError = null;
+                generacion.Mensaje = null;
+                generacion.Detalle = null;
+                generacion.Intentos++;
+                generacion.FechaUltimoIntento = ahora;
+                generacion.ResumenTarjeta = resumen;
+
+                var envio = CrearFilaCola(resumen, periodo.Id, usuario, pendiente.RecibirResumen, ahora);
+                context.EnvioResumenMail.Add(envio);
+
+                await context.SaveChangesAsync(cancellationToken);
+
+                bool encolado = envio.Estado == EstadosEnvio.Pendiente;
+                if (encolado) _colaSignal.Notificar();
+
+                return new ResultadoProceso { Resultado = ResultadoUsuario.Generado, Encolado = encolado };
             }
         }
         catch (Exception ex)
         {
-            fallidos.Add((usuario.Id, ex.Message));
+            _logger.LogWarning(ex, "Falló la generación del resumen del usuario {UsuarioId}.", usuario.Id);
+            await RegistrarFalloAsync(usuario.Id, periodo.Id, ejecucionId, CodigosErrorGeneracion.Excepcion, ex.Message, ex.ToString());
+            return new ResultadoProceso { Resultado = ResultadoUsuario.Fallido };
         }
         finally
         {
@@ -336,8 +355,196 @@ public class ResumenTarjetaService : IResumenTarjetaService
         }
     }
 
+    // ------------------------------------------------------------------
+    // SIMULACIÓN (no guarda nada)
+    // ------------------------------------------------------------------
 
+    public async Task<ResultadoSimulacionResumen> SimularResumenAsync(UsuarioParaProcesarDTO usuario, Periodo periodo, DateTime fechaGeneracion, string leyenda)
+    {
+        var resultado = new ResultadoSimulacionResumen
+        {
+            Nombre = usuario.NombreCompleto,
+            NroDocumento = usuario.NroDocumento,
+            NroTarjeta = usuario.NroTarjeta,
+            Mail = usuario.UserName,
+            Periodo = periodo.Descripcion,
+            PeriodoDesde = periodo.FechaDesde,
+            PeriodoHasta = periodo.FechaHasta,
+            Vencimiento = periodo.FechaVencimiento,
+            FechaGeneracion = fechaGeneracion
+        };
+
+        try
+        {
+            using (var scope = _scopeFactory.CreateScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<EstanciasContext>();
+                var datosEstructura = await context.DatosEstructura.AsNoTracking().FirstOrDefaultAsync();
+
+                var construido = await ConstruirResumenAsync(scope.ServiceProvider, usuario, datosEstructura, periodo, fechaGeneracion);
+                resultado.ResultadoWs = construido.ResultadoWs;
+
+                if (!construido.Ok)
+                {
+                    resultado.CodigoError = construido.CodigoError;
+                    resultado.Mensaje = construido.Mensaje;
+                    return resultado;
+                }
+
+                var d = construido.Datos;
+                resultado.Nombre = string.IsNullOrWhiteSpace(d.Nombre) ? resultado.Nombre : d.Nombre;
+                resultado.SaldoPendiente = d.SaldoPendiente;
+                resultado.SaldoActual = d.SaldoActual;
+                resultado.SaldoTotal = d.SaldoTotal;
+                resultado.CantidadConsumosAnteriores = d.ConsumosAnteriores?.Count ?? 0;
+                resultado.CantidadConsumosDelMes = d.ConsumosDelMes?.Count ?? 0;
+                resultado.Pdf = AgregarMarcaDeAgua(construido.Pdf, "SIMULACIÓN", leyenda);
+                resultado.Ok = true;
+                return resultado;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Falló la simulación del resumen de {Documento}.", usuario.NroDocumento);
+            resultado.CodigoError = CodigosErrorGeneracion.Excepcion;
+            resultado.Mensaje = ex.Message;
+            resultado.Detalle = ex.ToString();
+            return resultado;
+        }
+    }
+
+    /// <summary>
+    /// Estampa en cada página una marca de agua diagonal semitransparente y una leyenda arriba.
+    /// </summary>
+    private static byte[] AgregarMarcaDeAgua(byte[] pdf, string texto, string leyenda)
+    {
+        using (var entrada = new MemoryStream(pdf))
+        using (var salida = new MemoryStream())
+        {
+            using (var documento = new iText.Kernel.Pdf.PdfDocument(new iText.Kernel.Pdf.PdfReader(entrada), new iText.Kernel.Pdf.PdfWriter(salida)))
+            {
+                var fuente = iText.Kernel.Font.PdfFontFactory.CreateFont(iText.IO.Font.Constants.StandardFonts.HELVETICA_BOLD);
+                var fuenteLeyenda = iText.Kernel.Font.PdfFontFactory.CreateFont(iText.IO.Font.Constants.StandardFonts.HELVETICA);
+                var rojo = new iText.Kernel.Colors.DeviceRgb(220, 38, 38);
+
+                for (int i = 1; i <= documento.GetNumberOfPages(); i++)
+                {
+                    var pagina = documento.GetPage(i);
+                    var tamano = pagina.GetPageSize();
+                    var pdfCanvas = new iText.Kernel.Pdf.Canvas.PdfCanvas(pagina.NewContentStreamAfter(), pagina.GetResources(), documento);
+
+                    // Marca diagonal semitransparente
+                    pdfCanvas.SaveState();
+                    pdfCanvas.SetExtGState(new iText.Kernel.Pdf.Extgstate.PdfExtGState().SetFillOpacity(0.15f));
+                    new iText.Layout.Canvas(pdfCanvas, documento, tamano)
+                        .SetFont(fuente)
+                        .SetFontSize(tamano.GetWidth() / 6.5f)
+                        .SetFontColor(rojo)
+                        .ShowTextAligned(texto, tamano.GetWidth() / 2, tamano.GetHeight() / 2,
+                            iText.Layout.Properties.TextAlignment.CENTER, iText.Layout.Properties.VerticalAlignment.MIDDLE, (float)(Math.PI / 4));
+                    pdfCanvas.RestoreState();
+
+                    // Leyenda arriba, legible
+                    if (!string.IsNullOrEmpty(leyenda))
+                    {
+                        pdfCanvas.SaveState();
+                        pdfCanvas.SetExtGState(new iText.Kernel.Pdf.Extgstate.PdfExtGState().SetFillOpacity(0.85f));
+                        new iText.Layout.Canvas(pdfCanvas, documento, tamano)
+                            .SetFont(fuenteLeyenda)
+                            .SetFontSize(8)
+                            .SetFontColor(rojo)
+                            .ShowTextAligned(leyenda, tamano.GetWidth() / 2, tamano.GetHeight() - 12,
+                                iText.Layout.Properties.TextAlignment.CENTER, iText.Layout.Properties.VerticalAlignment.TOP, 0);
+                        pdfCanvas.RestoreState();
+                    }
+                }
+            }
+            return salida.ToArray();
+        }
+    }
+
+    /// <summary>
+    /// Arma la fila de la cola de envío. Si el resumen no se debe enviar,
+    /// queda registrada como Omitido con el motivo (así se sabe por qué no le llegó).
+    /// </summary>
+    private static EnvioResumenMail CrearFilaCola(ResumenTarjeta resumen, int periodoId, UsuarioParaProcesarDTO usuario, bool recibirResumen, DateTime ahora)
+    {
+        var email = (usuario.UserName ?? "").Trim();
+
+        string motivo = null;
+        if (!recibirResumen) motivo = MotivosOmision.NoRecibeResumen;
+        else if (resumen.Monto + resumen.MontoAdeudado <= 0) motivo = MotivosOmision.SinSaldo;
+        else if (string.IsNullOrEmpty(email) || !email.Contains("@")) motivo = MotivosOmision.SinEmail;
+        else if (resumen.Adjunto == null || resumen.Adjunto.Length == 0) motivo = MotivosOmision.SinPdf;
+
+        return new EnvioResumenMail
+        {
+            ResumenTarjeta = resumen,
+            PeriodoId = periodoId,
+            UsuarioId = usuario.Id,
+            EmailCliente = email,
+            EmailDestino = email,
+            EsPrueba = false,
+            Estado = motivo == null ? EstadosEnvio.Pendiente : EstadosEnvio.Omitido,
+            MotivoOmision = motivo,
+            Intentos = 0,
+            ProximoIntento = motivo == null ? ahora : (DateTime?)null,
+            FechaCreacion = ahora
+        };
+    }
+
+    private async Task RegistrarFalloAsync(string usuarioId, int periodoId, int ejecucionId, string codigoError, string mensaje, string detalle)
+    {
+        try
+        {
+            using (var scope = _scopeFactory.CreateScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<EstanciasContext>();
+                var ahora = DateTime.Now;
+
+                var generacion = await context.ResumenGeneracion
+                    .FirstOrDefaultAsync(g => g.PeriodoId == periodoId && g.UsuarioId == usuarioId);
+                if (generacion == null)
+                {
+                    generacion = new ResumenGeneracion { PeriodoId = periodoId, UsuarioId = usuarioId, FechaCreacion = ahora };
+                    context.ResumenGeneracion.Add(generacion);
+                }
+
+                generacion.EjecucionProcesoId = ejecucionId;
+                generacion.Estado = EstadosGeneracion.Fallido;
+                generacion.CodigoError = codigoError;
+                generacion.Mensaje = mensaje;
+                generacion.Detalle = detalle;
+                generacion.Intentos++;
+                generacion.FechaUltimoIntento = ahora;
+
+                await context.SaveChangesAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Si ni siquiera se puede registrar el fallo, al menos queda en el log
+            _logger.LogError(ex, "No se pudo registrar el fallo del usuario {UsuarioId} ({CodigoError}: {Mensaje}).", usuarioId, codigoError, mensaje);
+        }
+    }
+
+    private async Task ActualizarEjecucionAsync(int ejecucionId, ResultadoGeneracionResumen resultado, string estado, string errorGeneral, bool finalizar = false)
+    {
+        using (var scope = _scopeFactory.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<EstanciasContext>();
+            var ejecucion = await context.EjecucionProceso.FirstOrDefaultAsync(e => e.Id == ejecucionId);
+            if (ejecucion == null) return;
+
+            ejecucion.Estado = estado;
+            ejecucion.Total = resultado.Total;
+            ejecucion.Exitosos = resultado.Generados;
+            ejecucion.Fallidos = resultado.Fallidos;
+            ejecucion.Omitidos = resultado.OmitidosEnvio;
+            if (errorGeneral != null) ejecucion.ErrorGeneral = errorGeneral;
+            if (finalizar) ejecucion.FechaFin = DateTime.Now;
+
+            await context.SaveChangesAsync();
+        }
+    }
 }
-
-
-

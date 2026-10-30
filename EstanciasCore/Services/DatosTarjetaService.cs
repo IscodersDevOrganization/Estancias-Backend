@@ -180,17 +180,26 @@ namespace EstanciasCore.Services
                      });
 
 
+                // El WS a veces devuelve solicitudes o cuotas vacías (xsi:nil="true") o sin alguno de sus campos.
+                // Se descartan (igual que ya se hacía con Movimiento) en lugar de romper todo el resumen del cliente.
+                Func<XElement, bool> noEsNil = x => x.Attribute(xsi + "nil") == null || x.Attribute(xsi + "nil").Value != "true";
+
                 var detallesSolicitud = doc.Descendants(ns + "DetalleSolicitud")
+                                       .Where(noEsNil)
+                                       .Where(d => !string.IsNullOrWhiteSpace((string)d.Element(ns + "numeroSolicitud")))
                                        .Select(d => new SolicitudDetail()
                                        {
-                                           NumeroSolicitud = d.Element(ns + "numeroSolicitud").Value,
-                                           NombreComercio = d.Element(ns + "nombreComercio").Value,
-                                           DetallesCuota = d.Descendants(ns + "DetalleCuota").Select(e => new DetalleCuota()
-                                           {
-                                               Fecha = DateTime.ParseExact(e.Element(ns + "fechaCuota").Value, "yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture).ToString("dd/MM/yyyy"),
-                                               NumeroCuota = e.Element(ns + "numeroCuota").Value,
-                                               Monto = e.Element(ns + "montoCuota").Value
-                                           }).ToList()
+                                           NumeroSolicitud = (string)d.Element(ns + "numeroSolicitud"),
+                                           NombreComercio = (string)d.Element(ns + "nombreComercio") ?? "",
+                                           DetallesCuota = d.Descendants(ns + "DetalleCuota")
+                                               .Where(noEsNil)
+                                               .Where(e => !string.IsNullOrWhiteSpace((string)e.Element(ns + "fechaCuota")))
+                                               .Select(e => new DetalleCuota()
+                                               {
+                                                   Fecha = DateTime.ParseExact((string)e.Element(ns + "fechaCuota"), "yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture).ToString("dd/MM/yyyy"),
+                                                   NumeroCuota = (string)e.Element(ns + "numeroCuota") ?? "0",
+                                                   Monto = (string)e.Element(ns + "montoCuota") ?? "0"
+                                               }).ToList()
                                        });
 
                 combinedResults = new CombinedData()
@@ -553,14 +562,21 @@ namespace EstanciasCore.Services
 
             return totalDetallesCuota;
         }
-        public async Task<List<ResultadoCuotasDTO>> CalcularPunitoriosResumen(List<ResultadoCuotasDTO> cuotas)
+        public Task<List<ResultadoCuotasDTO>> CalcularPunitoriosResumen(List<ResultadoCuotasDTO> cuotas)
+        {
+            return CalcularPunitoriosResumen(cuotas, DateTime.Now);
+        }
+
+        /// <summary>
+        /// Igual que CalcularPunitoriosResumen, pero calculando la mora como si hoy fuera fechaReferencia.
+        /// Lo usa la simulación de resúmenes para reproducir la generación de un período.
+        /// </summary>
+        public async Task<List<ResultadoCuotasDTO>> CalcularPunitoriosResumen(List<ResultadoCuotasDTO> cuotas, DateTime fechaReferencia)
         {
             var culturaAR = new CultureInfo("es-AR");
             List<ResultadoCuotasDTO> cuotasConPunitorios = new List<ResultadoCuotasDTO>();
-            int anioActual = DateTime.Now.Year; // -> 2025
-            int mesActual = DateTime.Now.Month; // -> 8
 
-            DateTime fechaCorteMora = ObtenerFechaDeCalculoCorrecta();
+            DateTime fechaCorteMora = ObtenerFechaDeCalculoCorrecta(fechaReferencia);
 
 
             int diasDelAnio = DateTime.IsLeapYear(fechaCorteMora.Year) ? 366 : 365;
@@ -689,8 +705,11 @@ namespace EstanciasCore.Services
 
         public DateTime ObtenerFechaDeCalculoCorrecta()
         {
-            DateTime hoy = DateTime.Now;
+            return ObtenerFechaDeCalculoCorrecta(DateTime.Now);
+        }
 
+        public DateTime ObtenerFechaDeCalculoCorrecta(DateTime hoy)
+        {
             if (hoy.Day <= 15)
             {
                 // Si es antes del día 15, la fecha de cálculo es el 15 del mes actual.

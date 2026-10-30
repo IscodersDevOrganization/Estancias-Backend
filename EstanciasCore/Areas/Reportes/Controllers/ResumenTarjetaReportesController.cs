@@ -139,5 +139,139 @@ public class ResumenTarjetaReportesController : EstanciasCoreController
         return PartialView();
     }
 
+    // ------------------------------------------------------------------
+    // SIMULAR RESUMEN: genera el resumen con la lógica real, sin guardar nada
+    // ------------------------------------------------------------------
+
+    [HttpGet]
+    public async Task<IActionResult> _SimularResumen()
+    {
+        var hoy = DateTime.Today;
+        var opciones = new List<SelectListItem>();
+
+        // Períodos que todavía no existen (el del mes y los dos siguientes): se arman en memoria con la misma regla de la generación
+        var existentes = await _context.Periodo.AsNoTracking()
+            .OrderByDescending(p => p.FechaVencimiento)
+            .Take(12)
+            .ToListAsync();
+
+        var vencimientoDelMes = new DateTime(hoy.Year, hoy.Month, 15);
+        var proximo = vencimientoDelMes.AddMonths(1);   // el próximo a generarse (día 1 del mes que viene)
+        foreach (var venc in new[] { vencimientoDelMes.AddMonths(2), proximo, vencimientoDelMes })
+        {
+            if (!existentes.Any(p => p.FechaVencimiento.Date == venc.Date))
+            {
+                var calculado = ResumenTarjetaService.CalcularPeriodo(venc);
+                opciones.Add(new SelectListItem
+                {
+                    Value = "nuevo:" + venc.ToString("yyyy-MM-dd"),
+                    Text = $"{calculado.Descripcion} · vence {venc:dd/MM/yyyy} · nuevo"
+                });
+            }
+        }
+
+        opciones.AddRange(existentes.Select(p => new SelectListItem
+        {
+            Value = "id:" + p.Id,
+            Text = $"{p.Descripcion} · vence {p.FechaVencimiento:dd/MM/yyyy}"
+        }));
+
+        // Por defecto queda elegido el próximo período a generarse
+        var porDefecto = opciones.FirstOrDefault(o => o.Value == "nuevo:" + proximo.ToString("yyyy-MM-dd"))
+                         ?? opciones.FirstOrDefault(o => existentes.Any(p => p.FechaVencimiento.Date == proximo.Date && o.Value == "id:" + p.Id))
+                         ?? opciones.FirstOrDefault();
+        if (porDefecto != null) porDefecto.Selected = true;
+        ViewBag.Periodos = opciones;
+        return PartialView();
+    }
+
+    /// <summary>
+    /// Genera el resumen de un cliente para un período con la misma lógica que la generación mensual.
+    /// NO guarda nada en la base: devuelve el PDF con marca de agua "SIMULACIÓN" para verlo o descargarlo.
+    /// </summary>
+    [HttpPost]
+    public async Task<IActionResult> SimularResumen(string documentoOTarjeta, string periodo, DateTime? fechaGeneracion, [FromServices] IResumenTarjetaService resumenService)
+    {
+        try
+        {
+            var buscado = (documentoOTarjeta ?? "").Trim();
+            if (string.IsNullOrEmpty(buscado))
+                return Json(new { ok = false, mensaje = "Ingresá el DNI o el número de tarjeta del cliente." });
+
+            // --- Período: uno existente o uno nuevo armado en memoria (no se guarda) ---
+            Periodo periodoSimulado = null;
+            if (!string.IsNullOrEmpty(periodo) && periodo.StartsWith("id:") && int.TryParse(periodo.Substring(3), out int periodoId))
+            {
+                periodoSimulado = await _context.Periodo.AsNoTracking().FirstOrDefaultAsync(p => p.Id == periodoId);
+            }
+            else if (!string.IsNullOrEmpty(periodo) && periodo.StartsWith("nuevo:") &&
+                     DateTime.TryParseExact(periodo.Substring(6), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime venc))
+            {
+                periodoSimulado = ResumenTarjetaService.CalcularPeriodo(venc);
+            }
+            if (periodoSimulado == null)
+                return Json(new { ok = false, mensaje = "Elegí un período válido." });
+
+            // --- Cliente por DNI o por número de tarjeta ---
+            var usuarios = await _context.Usuarios.AsNoTracking()
+                .Where(u => u.Personas != null &&
+                            !string.IsNullOrEmpty(u.Personas.NroTarjeta) &&
+                            !string.IsNullOrEmpty(u.Personas.NroDocumento) &&
+                            (u.Personas.NroDocumento == buscado || u.Personas.NroTarjeta == buscado))
+                .Select(u => new DAL.DTOs.Servicios.UsuarioParaProcesarDTO
+                {
+                    Id = u.Id,
+                    NombreCompleto = u.Personas.GetNombreCompleto(),
+                    NroDocumento = u.Personas.NroDocumento,
+                    NroTarjeta = u.Personas.NroTarjeta,
+                    UserName = u.UserName
+                })
+                .Take(5)
+                .ToListAsync();
+
+            if (!usuarios.Any())
+                return Json(new { ok = false, mensaje = $"No se encontró ningún cliente con DNI o tarjeta '{buscado}' que tenga tarjeta y documento cargados." });
+
+            var usuario = usuarios.First();
+
+            // Por defecto se simula como si se generara el día 1 del mes de vencimiento (igual que la generación automática)
+            var fecha = (fechaGeneracion ?? new DateTime(periodoSimulado.FechaVencimiento.Year, periodoSimulado.FechaVencimiento.Month, 1)).Date;
+
+            var leyenda = $"SIMULACIÓN - NO VÁLIDO COMO COMPROBANTE - generado el {DateTime.Now:dd/MM/yyyy HH:mm} por {User?.Identity?.Name}";
+            var r = await resumenService.SimularResumenAsync(usuario, periodoSimulado, fecha, leyenda);
+
+            var culturaAR = new CultureInfo("es-AR");
+            return Json(new
+            {
+                ok = r.Ok,
+                mensaje = r.Mensaje,
+                codigo = r.CodigoError,
+                detalle = r.Detalle,
+                resultadoWs = r.ResultadoWs,
+                variosClientes = usuarios.Count > 1,
+                nombre = r.Nombre,
+                documento = r.NroDocumento,
+                tarjeta = r.NroTarjeta,
+                mail = r.Mail,
+                periodo = r.Periodo,
+                periodoDesde = r.PeriodoDesde.ToString("dd/MM/yyyy"),
+                periodoHasta = r.PeriodoHasta.ToString("dd/MM/yyyy"),
+                vencimiento = r.Vencimiento.ToString("dd/MM/yyyy"),
+                fechaGeneracion = r.FechaGeneracion.ToString("dd/MM/yyyy"),
+                saldoPendiente = r.SaldoPendiente.ToString("C", culturaAR),
+                saldoActual = r.SaldoActual.ToString("C", culturaAR),
+                saldoTotal = r.SaldoTotal.ToString("C", culturaAR),
+                consumosAnteriores = r.CantidadConsumosAnteriores,
+                consumosDelMes = r.CantidadConsumosDelMes,
+                pdf = r.Pdf != null ? Convert.ToBase64String(r.Pdf) : null,
+                nombreArchivo = $"SIMULACION_Resumen_{r.NroDocumento}_{r.Vencimiento:yyyyMM}.pdf"
+            });
+        }
+        catch (Exception ex)
+        {
+            return Json(new { ok = false, mensaje = "Error al simular el resumen: " + ex.Message, detalle = ex.ToString() });
+        }
+    }
+
     
 }

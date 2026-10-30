@@ -1455,6 +1455,46 @@ namespace DAL.Migrations
                     b.ToTable("DistribucionResumen");
                 });
 
+            modelBuilder.Entity("DAL.Models.EjecucionProceso", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+
+                    b.Property<string>("Codigo")
+                        .HasMaxLength(50);
+
+                    b.Property<string>("ErrorGeneral");
+
+                    b.Property<string>("Estado")
+                        .HasMaxLength(30);
+
+                    b.Property<int>("Exitosos");
+
+                    b.Property<int>("Fallidos");
+
+                    b.Property<DateTime?>("FechaFin");
+
+                    b.Property<DateTime>("FechaInicio");
+
+                    b.Property<int>("Omitidos");
+
+                    b.Property<int?>("PeriodoId");
+
+                    b.Property<string>("Servidor")
+                        .HasMaxLength(100);
+
+                    b.Property<int>("Total");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PeriodoId");
+
+                    b.HasIndex("Codigo", "PeriodoId");
+
+                    b.ToTable("EjecucionProceso");
+                });
+
             modelBuilder.Entity("DAL.Models.Empresas", b =>
                 {
                     b.Property<int>("Id")
@@ -1530,6 +1570,117 @@ namespace DAL.Migrations
                     b.HasIndex("GrupoId");
 
                     b.ToTable("Empresas");
+                });
+
+            modelBuilder.Entity("DAL.Models.EnvioResumenMail", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+
+                    b.Property<string>("CodigoErrorProveedor")
+                        .HasMaxLength(100);
+
+                    b.Property<string>("EmailCliente")
+                        .HasMaxLength(256);
+
+                    b.Property<string>("EmailDestino")
+                        .HasMaxLength(256);
+
+                    b.Property<string>("Error");
+
+                    b.Property<bool>("EsPrueba");
+
+                    b.Property<string>("Estado")
+                        .HasMaxLength(20);
+
+                    b.Property<DateTime>("FechaCreacion");
+
+                    b.Property<DateTime?>("FechaEnvio");
+
+                    b.Property<DateTime?>("FechaUltimoIntento");
+
+                    b.Property<int?>("HttpStatus");
+
+                    b.Property<int>("Intentos");
+
+                    b.Property<string>("MotivoOmision")
+                        .HasMaxLength(50);
+
+                    b.Property<int>("PeriodoId");
+
+                    b.Property<string>("Proveedor")
+                        .HasMaxLength(30);
+
+                    b.Property<string>("ProveedorMessageId")
+                        .HasMaxLength(200);
+
+                    b.Property<DateTime?>("ProximoIntento");
+
+                    b.Property<int>("ResumenTarjetaId");
+
+                    b.Property<string>("UsuarioId")
+                        .HasMaxLength(450);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PeriodoId");
+
+                    b.HasIndex("ResumenTarjetaId")
+                        .IsUnique()
+                        .HasFilter("[EsPrueba] = 0");
+
+                    b.HasIndex("UsuarioId");
+
+                    b.HasIndex("Estado", "ProximoIntento");
+
+                    b.ToTable("EnvioResumenMail");
+                });
+
+            modelBuilder.Entity("DAL.Models.EnvioResumenMailIntento", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+
+                    b.Property<string>("CodigoErrorProveedor")
+                        .HasMaxLength(100);
+
+                    b.Property<long>("DuracionMs");
+
+                    b.Property<string>("EmailDestino")
+                        .HasMaxLength(256);
+
+                    b.Property<int>("EnvioResumenMailId");
+
+                    b.Property<string>("Error");
+
+                    b.Property<bool>("Exito");
+
+                    b.Property<DateTime>("Fecha");
+
+                    b.Property<int?>("HttpStatus");
+
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(300);
+
+                    b.Property<int>("NroIntento");
+
+                    b.Property<string>("Proveedor")
+                        .HasMaxLength(30);
+
+                    b.Property<string>("ProveedorMessageId")
+                        .HasMaxLength(200);
+
+                    b.Property<bool>("Reintentable");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EnvioResumenMailId");
+
+                    b.HasIndex("Fecha");
+
+                    b.ToTable("EnvioResumenMailIntento");
                 });
 
             modelBuilder.Entity("DAL.Models.EstadoSolicitudDeTarjeta", b =>
@@ -2461,6 +2612,52 @@ namespace DAL.Migrations
                     b.ToTable("Reservas");
                 });
 
+            modelBuilder.Entity("DAL.Models.ResumenGeneracion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+
+                    b.Property<string>("CodigoError")
+                        .HasMaxLength(50);
+
+                    b.Property<string>("Detalle");
+
+                    b.Property<int?>("EjecucionProcesoId");
+
+                    b.Property<string>("Estado")
+                        .HasMaxLength(20);
+
+                    b.Property<DateTime>("FechaCreacion");
+
+                    b.Property<DateTime>("FechaUltimoIntento");
+
+                    b.Property<int>("Intentos");
+
+                    b.Property<string>("Mensaje");
+
+                    b.Property<int>("PeriodoId");
+
+                    b.Property<int?>("ResumenTarjetaId");
+
+                    b.Property<string>("UsuarioId")
+                        .HasMaxLength(450);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EjecucionProcesoId");
+
+                    b.HasIndex("ResumenTarjetaId");
+
+                    b.HasIndex("UsuarioId");
+
+                    b.HasIndex("PeriodoId", "UsuarioId")
+                        .IsUnique()
+                        .HasFilter("[UsuarioId] IS NOT NULL");
+
+                    b.ToTable("ResumenGeneracion");
+                });
+
             modelBuilder.Entity("DAL.Models.ResumenTarjeta", b =>
                 {
                     b.Property<int>("Id")
@@ -3350,11 +3547,45 @@ namespace DAL.Migrations
                         .HasForeignKey("UsuarioId");
                 });
 
+            modelBuilder.Entity("DAL.Models.EjecucionProceso", b =>
+                {
+                    b.HasOne("DAL.Models.Periodo", "Periodo")
+                        .WithMany()
+                        .HasForeignKey("PeriodoId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("DAL.Models.Empresas", b =>
                 {
                     b.HasOne("DAL.Models.Grupos", "Grupo")
                         .WithMany()
                         .HasForeignKey("GrupoId");
+                });
+
+            modelBuilder.Entity("DAL.Models.EnvioResumenMail", b =>
+                {
+                    b.HasOne("DAL.Models.Periodo", "Periodo")
+                        .WithMany()
+                        .HasForeignKey("PeriodoId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("DAL.Models.ResumenTarjeta", "ResumenTarjeta")
+                        .WithMany()
+                        .HasForeignKey("ResumenTarjetaId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("DAL.Models.Usuario", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("DAL.Models.EnvioResumenMailIntento", b =>
+                {
+                    b.HasOne("DAL.Models.EnvioResumenMail", "EnvioResumenMail")
+                        .WithMany("HistorialIntentos")
+                        .HasForeignKey("EnvioResumenMailId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("DAL.Models.FotosPremios", b =>
@@ -3550,6 +3781,29 @@ namespace DAL.Migrations
                     b.HasOne("DAL.Models.Horarios", "Horario")
                         .WithMany()
                         .HasForeignKey("HorarioId");
+                });
+
+            modelBuilder.Entity("DAL.Models.ResumenGeneracion", b =>
+                {
+                    b.HasOne("DAL.Models.EjecucionProceso", "EjecucionProceso")
+                        .WithMany()
+                        .HasForeignKey("EjecucionProcesoId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("DAL.Models.Periodo", "Periodo")
+                        .WithMany()
+                        .HasForeignKey("PeriodoId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("DAL.Models.ResumenTarjeta", "ResumenTarjeta")
+                        .WithMany()
+                        .HasForeignKey("ResumenTarjetaId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("DAL.Models.Usuario", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("DAL.Models.ResumenTarjeta", b =>

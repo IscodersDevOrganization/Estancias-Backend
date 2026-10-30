@@ -1,7 +1,7 @@
 ﻿using DAL.Data;
+using DAL.Models;
 using DAL.Models.Core;
 using EstanciasCore.Interface;
-using EstanciasCore.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,35 +12,30 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using static EstanciasCore.Services.common;
-using static Microsoft.AspNetCore.Hosting.Internal.HostingApplication;
 
+/// <summary>
+/// Genera los resúmenes del mes el día configurado en Procedimientos (Codigo = "GenerarResumen").
+/// Cada resumen generado queda encolado para envío; este worker NO envía mails a clientes.
+/// Si hay fallos, en la hora siguiente reintenta solo los usuarios que faltan (hasta MaxIntentosPorDia).
+/// </summary>
 public class ResumenMensualWorker : BackgroundService
 {
     private readonly ILogger<ResumenMensualWorker> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConfiguration _configuration;
-    private readonly IMailService _mailService;
-    private readonly string[] _adminEmails;
 
-    // Estado del worker
-    private DateTime? _ultimaEjecucionMarcada = null;
-    private int _intentosHoy = 0;
-    private int _ultimoDiaDeIntentos = 0;
-
-    public ResumenMensualWorker(ILogger<ResumenMensualWorker> logger, IServiceScopeFactory scopeFactory, IConfiguration configuration, IMailService mailService)
+    public ResumenMensualWorker(ILogger<ResumenMensualWorker> logger, IServiceScopeFactory scopeFactory, IConfiguration configuration)
     {
         _logger = logger;
         _scopeFactory = scopeFactory;
         _configuration = configuration;
-
-        var emails = _configuration["NotificationSettings:AdminEmails"];
-        _adminEmails = emails?.Split(';', StringSplitOptions.RemoveEmptyEntries) ?? new string[0];
-        _mailService=mailService;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("Worker de Resúmenes Mensuales iniciado.");
+
+        await MarcarEjecucionesInterrumpidasAsync();
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -50,123 +45,129 @@ public class ResumenMensualWorker : BackgroundService
                 {
                     var context = scope.ServiceProvider.GetRequiredService<EstanciasContext>();
 
-                    // Consulta corregida para ser más directa
                     var procedimiento = await context.Procedimientos
-                    .FirstOrDefaultAsync(p => p.Codigo == "GenerarResumen" && p.Activo == true, stoppingToken);
+                        .FirstOrDefaultAsync(p => p.Codigo == CodigosProceso.GenerarResumen && p.Activo, stoppingToken);
 
-                    if (procedimiento != null && procedimiento.Activo && DebeEjecutarHoy(procedimiento.DiaEjecucion, procedimiento.FechaUltimaEjecucionExitosa))
+                    if (procedimiento != null && await DebeEjecutarHoyAsync(context, procedimiento, stoppingToken))
                     {
-                        await EjecutarProcesoConNotificaciones(scope, context, procedimiento);
+                        await EjecutarAsync(scope, context, procedimiento, stoppingToken);
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Ocurrió un error fatal en el ciclo del worker.");
-                // Opcional: Enviar un email de fallo crítico si el propio worker falla
-                await EnviarNotificacionAsync("Error Crítico en Worker", $"El worker de resúmenes ha fallado de forma inesperada. Error: {ex.Message}");
+                _logger.LogError(ex, "Ocurrió un error en el ciclo del worker de generación de resúmenes.");
+                await EnviarNotificacionAsync("Error en Worker de Generación de Resúmenes", $"El worker falló de forma inesperada a las {DateTime.Now:G}.<br/><br/>{ex.Message}");
             }
 
             await Task.Delay(TimeSpan.FromHours(1), stoppingToken);
         }
     }
 
-    private async Task EjecutarProcesoConNotificaciones(IServiceScope scope, EstanciasContext context, dynamic procedimiento)    
+    private async Task EjecutarAsync(IServiceScope scope, EstanciasContext context, Procedimientos procedimiento, CancellationToken stoppingToken)
     {
-        string resultadoFinal = "FALLIDO"; // Estado por defecto
-        _intentosHoy++;
-        bool exito = false;
+        var resumenService = scope.ServiceProvider.GetRequiredService<IResumenTarjetaService>();
+        var resultado = await resumenService.GenerarResumenTarjetas(stoppingToken);
+
+        // Solo se marca como exitoso si no quedó ningún usuario con error.
+        // Si hubo errores, el próximo ciclo reintenta solo los que faltan.
+        if (resultado.Estado == EstadosEjecucion.Completado)
+        {
+            procedimiento.FechaUltimaEjecucionExitosa = DateTime.Now;
+            await context.SaveChangesAsync();
+        }
+
+        await EnviarNotificacionAsync(
+            $"Generación de Resúmenes: {resultado.Estado}",
+            $"La generación terminó a las {DateTime.Now:G}.<br/><br/>" +
+            $"<strong>Ejecución:</strong> {resultado.EjecucionId} &nbsp; <strong>Período:</strong> {resultado.PeriodoId}<br/>" +
+            $"<strong>Usuarios pendientes procesados:</strong> {resultado.Total}<br/>" +
+            $"<strong>Generados:</strong> {resultado.Generados}<br/>" +
+            $"<strong>Con error:</strong> {resultado.Fallidos}<br/>" +
+            $"<strong>Encolados para envío:</strong> {resultado.Encolados}<br/>" +
+            $"<strong>Sin envío (no recibe / sin saldo / sin mail):</strong> {resultado.OmitidosEnvio}<br/>" +
+            (string.IsNullOrEmpty(resultado.Error) ? "" : $"<br/><strong>Error general:</strong> {resultado.Error}<br/>") +
+            "<br/>El detalle por usuario está en la tabla ResumenGeneracion."
+        );
+    }
+
+    private async Task<bool> DebeEjecutarHoyAsync(EstanciasContext context, Procedimientos procedimiento, CancellationToken stoppingToken)
+    {
+        var hoy = DateTime.Today;
+
+        if (hoy.Day != procedimiento.DiaEjecucion) return false;
+        if (procedimiento.FechaUltimaEjecucionExitosa.HasValue && procedimiento.FechaUltimaEjecucionExitosa.Value.Date == hoy) return false;
+
+        // Intentos contados en la base (antes estaban en memoria y se perdían al reiniciar la app)
+        var maxIntentos = _configuration.GetValue<int>("ProcesoResumen:MaxIntentosPorDia", 3);
+        var intentosHoy = await context.EjecucionProceso
+            .CountAsync(e => e.Codigo == CodigosProceso.GenerarResumen && e.FechaInicio >= hoy, stoppingToken);
+
+        if (intentosHoy >= maxIntentos)
+        {
+            _logger.LogWarning("Generación de resúmenes: se alcanzó el máximo de {Max} intentos para hoy.", maxIntentos);
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Si la app se reinició en medio de una generación, esa ejecución quedó "EnCurso".
+    /// La marcamos como Cancelado para que no bloquee el cierre del período.
+    /// </summary>
+    private async Task MarcarEjecucionesInterrumpidasAsync()
+    {
         try
         {
-            // 1. ENVIAR EMAIL DE INICIO
-            await EnviarNotificacionAsync(
-                "Inicio del Proceso de Resúmenes",
-                $"El proceso ha comenzado a las {DateTime.Now:G}. (Intento {_intentosHoy})"
-            );
-
-            // 2. EJECUTAR LÓGICA DE NEGOCIO
-            var resumenService = scope.ServiceProvider.GetRequiredService<IResumenTarjetaService>();
-            exito = await resumenService.GenerarResumenTarjetas();
-            resultadoFinal = exito ? "ÉXITO" : "FINALIZADO CON ADVERTENCIAS";
-            if (exito)
+            using (var scope = _scopeFactory.CreateScope())
             {
-                // Actualizamos la fecha en el objeto
-                procedimiento.FechaUltimaEjecucionExitosa = DateTime.Now;
+                var context = scope.ServiceProvider.GetRequiredService<EstanciasContext>();
+                var colgadas = await context.EjecucionProceso
+                    .Where(e => e.Codigo == CodigosProceso.GenerarResumen && e.Estado == EstadosEjecucion.EnCurso)
+                    .ToListAsync();
 
-                // Guardamos los cambios en SQL
-                await context.SaveChangesAsync();
+                foreach (var e in colgadas)
+                {
+                    e.Estado = EstadosEjecucion.Cancelado;
+                    e.FechaFin = DateTime.Now;
+                    e.ErrorGeneral = "Interrumpida: la aplicación se reinició durante la generación.";
+                }
 
-                _logger.LogInformation("Fecha de última ejecución actualizada en base de datos correctamente.");
+                if (colgadas.Any())
+                {
+                    await context.SaveChangesAsync();
+                    _logger.LogWarning("Se marcaron {Cantidad} ejecuciones de generación interrumpidas.", colgadas.Count);
+                }
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Error crítico durante la ejecución del servicio en el intento {_intentosHoy}.");
-            resultadoFinal = $"FALLIDO CRÍTICAMENTE: {ex.Message}";
-        }
-        finally
-        {
-            // 3. ENVIAR EMAIL DE FINALIZACIÓN (SIEMPRE SE EJECUTA)
-            await EnviarNotificacionAsync(
-                $"Proceso de Resúmenes Finalizado con Estado: {resultadoFinal}",
-                $"La ejecución ha concluido a las {DateTime.Now:G}. El resultado fue: {resultadoFinal}."
-            );
-
-            // 4. MARCAR COMO EJECUTADO PARA NO REPETIR HOY
-            _ultimaEjecucionMarcada = DateTime.Today;
+            _logger.LogError(ex, "No se pudieron revisar las ejecuciones interrumpidas.");
         }
     }
 
-    // --- MÉTODO PRIVADO QUE USA TU LÓGICA DE EMAIL ---
-    private Task EnviarNotificacionAsync(string asunto, string cuerpoHTML)
+    /// <summary>Avisos internos a los administradores (NotificationSettings:AdminEmails).</summary>
+    private async Task EnviarNotificacionAsync(string asunto, string cuerpoHTML)
     {
-        if (_adminEmails.Length == 0)
+        var emails = _configuration["NotificationSettings:AdminEmails"];
+        var adminEmails = emails?.Split(';', StringSplitOptions.RemoveEmptyEntries) ?? new string[0];
+
+        if (adminEmails.Length == 0)
         {
-            _logger.LogWarning("No hay emails de administrador configurados. Se omite el envío de notificación.");
-            return Task.CompletedTask;
+            _logger.LogWarning("No hay emails de administrador configurados. Se omite la notificación '{Asunto}'.", asunto);
+            return;
         }
 
-        _logger.LogInformation($"Preparando email: '{asunto}'");
-        foreach (var emailDestino in _adminEmails)
+        using (var scope = _scopeFactory.CreateScope())
         {
-            try
+            var mailService = scope.ServiceProvider.GetRequiredService<IMailService>();
+            foreach (var emailDestino in adminEmails)
             {
-                var mail = new MailAPI { Mail = emailDestino.Trim(), Titulo = asunto, Html = cuerpoHTML };
-                _mailService.EnviarAsync(mail);
-                _logger.LogInformation($"Email enviado exitosamente a: {emailDestino}");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Fallo al enviar el email de notificación a: {emailDestino}");
+                var resultado = await mailService.EnviarConResultadoAsync(new MailAPI { Mail = emailDestino.Trim(), Titulo = asunto, Html = cuerpoHTML });
+                if (!resultado.Exito)
+                    _logger.LogWarning("No se pudo enviar la notificación '{Asunto}' a {Email}: {Error}", asunto, emailDestino, resultado.Error);
             }
         }
-        return Task.CompletedTask;
-    }
-
-    private bool DebeEjecutarHoy(int diaDeEjecucionDesdeBD, DateTime? fechaUltimaEjecucionBD)
-    {
-        var ahora = DateTime.Now;
-
-        // Lógica para reiniciar contadores locales si el día cambió (Útil si el servicio no se reinicia)
-        if (ahora.Day != _ultimoDiaDeIntentos)
-        {
-            _intentosHoy = 0;
-            // No necesitamos _ultimaEjecucionMarcada si usamos la BD
-            _ultimoDiaDeIntentos = ahora.Day;
-        }
-
-        bool esDiaDeEjecucion = ahora.Day == diaDeEjecucionDesdeBD;
-
-        // Comprueba si ya se ejecutó con éxito hoy usando la fecha de la BD.
-        // **Esta es la verificación clave.**
-        bool yaSeEjecutoHoy = fechaUltimaEjecucionBD.HasValue && fechaUltimaEjecucionBD.Value.Date == ahora.Date;
-
-        bool limiteDeIntentosSuperado = _intentosHoy >= 3;
-
-        // Solo ejecuta si:
-        // 1. Es el día de ejecución configurado (por ejemplo, el 4).
-        // 2. NO se ha completado exitosamente HOY según el registro de la BD.
-        // 3. NO ha superado el límite de reintentos desde el último inicio del worker.
-        return esDiaDeEjecucion && !yaSeEjecutoHoy && !limiteDeIntentosSuperado;
     }
 }

@@ -147,6 +147,7 @@ namespace EstanciasCore.Controllers.ViewComponents.Layout
                     MenuHelpers.AddModule("Pagos Tarjeta", "/Reportes/PagoTarjetaReportes/"),
                     MenuHelpers.AddModule("Clientes", "/Reportes/ClientesReportes/"),
                     MenuHelpers.AddModule("Resumen Tarjeta", "/Reportes/ResumenTarjetaReportes/"),
+                    MenuHelpers.AddModule("Cola de Resúmenes", "/Reportes/ColaResumenes/"),
                     MenuHelpers.AddModule("Cupones", "/Reportes/CuponesReportes/"),
                     //MenuHelpers.AddModule("Resumen de Deuda", "/Reportes/ResumenDeuda/")
                 };
@@ -348,6 +349,9 @@ namespace EstanciasCore.Controllers.ViewComponents.Layout
 
                 if (UserHasAnyRoute("/Reportes/ResumenTarjetaReportes/Index", "/ResumenTarjetaReportes/Index"))
                     reportes.TreeChild.Add(MenuHelpers.AddModule("Resumen Tarjeta", "/Reportes/ResumenTarjetaReportes/"));
+
+                if (UserHasAnyRoute("/Reportes/ColaResumenes/Index", "/ColaResumenes/Index"))
+                    reportes.TreeChild.Add(MenuHelpers.AddModule("Cola de Resúmenes", "/Reportes/ColaResumenes/"));
 
                 if (UserHasAnyRoute("/Reportes/CuponesReportes/Index", "/CuponesReportes/Index"))
                     reportes.TreeChild.Add(MenuHelpers.AddModule("Cupones", "/Reportes/CuponesReportes/"));

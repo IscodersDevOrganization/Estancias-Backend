@@ -1,0 +1,596 @@
+﻿@model DAL.DTOs.Reportes.ColaResumenesPanelDTO
+@using DAL.Models
+@{
+    ViewData["Title"] = "Cola de Resúmenes";
+    ViewData["BackArrow"] = "/Home/Index";
+
+    var pendientesTotal = Model.Pendientes + Model.Enviando;
+    var totalEnvio = pendientesTotal + Model.Enviados + Model.Reintentando + Model.FallidosDefinitivos + Model.Omitidos;
+    var totalGeneracion = Model.Generados + Model.FallidosGeneracion;
+
+    // Estado del envío a clientes
+    string modoClase, modoIcono, modoTitulo, modoTexto, modoPill;
+    if (Model.ModoEnvio == "Produccion" && Model.EnvioActivo)
+    {
+        modoClase = "cr-modo-ok"; modoIcono = "fa-paper-plane"; modoPill = "Activo";
+        modoTitulo = "Envío a clientes activo";
+        modoTexto = "Los resúmenes pendientes se están enviando a los clientes.";
+    }
+    else if (Model.ModoEnvio == "Produccion")
+    {
+        modoClase = "cr-modo-warn"; modoIcono = "fa-pause"; modoPill = "En pausa";
+        modoTitulo = "Envío en pausa";
+        modoTexto = "El modo es Producción, pero el procedimiento EnvioResumen está inactivo. Los resúmenes quedan pendientes en la cola.";
+    }
+    else if (Model.ModoEnvio == "Prueba")
+    {
+        modoClase = "cr-modo-info"; modoIcono = "fa-flask"; modoPill = "Prueba";
+        modoTitulo = "Modo prueba";
+        modoTexto = "No se envía nada a los clientes. Solo se mandan resúmenes de muestra a " +
+                    (string.IsNullOrWhiteSpace(Model.EmailsPrueba) ? "(sin casillas configuradas)" : Model.EmailsPrueba) + ".";
+    }
+    else
+    {
+        modoClase = "cr-modo-off"; modoIcono = "fa-ban"; modoPill = "Deshabilitado";
+        modoTitulo = "Envío a clientes deshabilitado";
+        modoTexto = "No se envía ningún mail. Los resúmenes generados quedan pendientes en la cola (EnvioResumen:Modo).";
+    }
+}
+
+<style>
+    .content-header { display: none !important; }
+
+    /* --- Selector de período --- */
+    .cr-periodo { display: flex; align-items: center; gap: 8px; }
+    .cr-periodo label { margin: 0; font-size: 12px; font-weight: 600; color: #64748b; }
+    .cr-periodo select.modern-select { min-width: 240px !important; max-width: 320px !important; }
+    .cr-periodo .bootstrap-select { display: none !important; } /* bootstrap-select duplicaba el selector */
+
+    /* --- Banner de estado --- */
+    .cr-estado { display: flex; align-items: center; gap: 16px; padding: 14px 20px; border-radius: 12px; border: 1px solid #e2e8f0; background: #fff; margin-bottom: 20px; flex-wrap: wrap; }
+    .cr-estado-icono { width: 40px; height: 40px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
+    .cr-estado-texto { flex: 1; min-width: 260px; }
+    .cr-estado-titulo { font-size: 14px; font-weight: 600; color: #0f172a; margin: 0; display: flex; align-items: center; gap: 8px; }
+    .cr-estado-sub { font-size: 12.5px; color: #64748b; margin: 2px 0 0 0; }
+    .cr-estado-meta { display: flex; gap: 22px; flex-wrap: wrap; border-left: 1px solid #f1f5f9; padding-left: 20px; }
+    .cr-meta-item { display: flex; flex-direction: column; }
+    .cr-meta-label { font-size: 10.5px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: #94a3b8; }
+    .cr-meta-valor { font-size: 13px; color: #1e293b; font-weight: 500; }
+    .cr-modo-ok .cr-estado-icono { background: #f0fdf4; color: #16a34a; }
+    .cr-modo-ok { border-left: 4px solid #16a34a; }
+    .cr-modo-warn .cr-estado-icono { background: #fffbeb; color: #d97706; }
+    .cr-modo-warn { border-left: 4px solid #f59e0b; }
+    .cr-modo-info .cr-estado-icono { background: #f5f3ff; color: #7c3aed; }
+    .cr-modo-info { border-left: 4px solid #8b5cf6; }
+    .cr-modo-off .cr-estado-icono { background: #fef2f2; color: #dc2626; }
+    .cr-modo-off { border-left: 4px solid #ef4444; }
+
+    /* --- KPIs --- */
+    .cr-kpis { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+    .cr-kpi-grupo { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px 16px 16px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+    .cr-kpi-grupo.gen { flex: 2 1 260px; }
+    .cr-kpi-grupo.env { flex: 6 1 560px; }
+    .cr-kpi-grupo-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+    .cr-kpi-grupo-titulo { font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: #475569; }
+    .cr-kpi-grupo-total { font-size: 12px; color: #94a3b8; }
+    .cr-kpi-grid { display: grid; gap: 10px; }
+    .cr-kpi-grupo.gen .cr-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .cr-kpi-grupo.env .cr-kpi-grid { grid-template-columns: repeat(6, 1fr); }
+    .cr-kpi { border: 1px solid #f1f5f9; background: #f8fafc; border-radius: 10px; padding: 10px 12px; cursor: pointer; transition: all .15s ease; position: relative; }
+    .cr-kpi:hover { background: #fff; border-color: #cbd5e1; box-shadow: 0 2px 6px rgba(15,23,42,.06); }
+    .cr-kpi-top { display: flex; align-items: center; justify-content: space-between; }
+    .cr-kpi-numero { font-size: 24px; font-weight: 700; color: #0f172a; line-height: 1.1; }
+    .cr-kpi-label { font-size: 12px; color: #64748b; margin-top: 2px; white-space: nowrap; }
+    .cr-kpi-chip { width: 28px; height: 28px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; }
+    .cr-kpi.cero .cr-kpi-numero { color: #cbd5e1; }
+    .chip-green { background: #f0fdf4; color: #16a34a; }
+    .chip-red { background: #fef2f2; color: #dc2626; }
+    .chip-blue { background: #eff6ff; color: #2563eb; }
+    .chip-amber { background: #fffbeb; color: #d97706; }
+    .chip-slate { background: #f1f5f9; color: #64748b; }
+    .chip-purple { background: #f5f3ff; color: #7c3aed; }
+    .cr-kpi.alerta { border-color: #fecaca; background: #fff5f5; }
+    .cr-kpi.alerta .cr-kpi-numero { color: #dc2626; }
+
+    /* --- Desgloses --- */
+    .cr-desgloses { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .cr-desglose { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+    .cr-desglose-titulo { font-size: 13px; font-weight: 600; color: #0f172a; margin: 0 0 10px 0; display: flex; align-items: center; gap: 8px; }
+    .cr-desglose-titulo i { color: #94a3b8; }
+    .cr-fila { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-radius: 8px; cursor: pointer; transition: background .12s; }
+    .cr-fila:hover { background: #f8fafc; }
+    .cr-fila code { background: transparent; color: #334155; padding: 0; font-size: 12px; }
+    .cr-vacio { font-size: 12.5px; color: #94a3b8; display: flex; align-items: center; gap: 6px; padding: 4px 8px; }
+    .cr-vacio i { color: #22c55e; }
+
+    /* --- Pestañas --- */
+    .cr-tabs { display: inline-flex; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 3px; margin-bottom: 18px; list-style: none; }
+    .cr-tabs > li > a { display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px; border-radius: 7px; font-size: 13px; font-weight: 500; color: #64748b; text-decoration: none; }
+    .cr-tabs > li > a:hover { color: #0f172a; }
+    .cr-tabs > li.active > a { background: #fff; color: #0f172a; font-weight: 600; box-shadow: 0 1px 2px rgba(15,23,42,.08); }
+    .cr-tabs .cr-tab-num { font-size: 11px; background: #e2e8f0; color: #475569; border-radius: 9999px; padding: 1px 7px; }
+    .cr-tabs > li.active .cr-tab-num { background: #eff6ff; color: #2563eb; }
+
+    /* --- Toolbar de filtros --- */
+    .cr-toolbar .card-toolbar-right { flex-wrap: wrap !important; }
+    .cr-check { display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 13px; color: #475569; cursor: pointer; margin: 0; font-weight: 500; background: #fff; }
+    .cr-check input { margin: 0; }
+    .cr-btn { height: 38px; border-radius: 8px !important; display: inline-flex !important; align-items: center; gap: 6px; padding: 0 14px !important; font-weight: 500; }
+    .cr-filtro-activo { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+    .cr-pre { white-space: pre-wrap; word-break: break-word; font-size: 11.5px; }
+
+    @@media (max-width: 1200px) {
+        .cr-kpi-grupo.env .cr-kpi-grid { grid-template-columns: repeat(3, 1fr); }
+        .cr-desgloses { grid-template-columns: 1fr; }
+    }
+    @@media (max-width: 600px) {
+        .cr-kpi-grupo.env .cr-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+        .cr-estado-meta { border-left: none; padding-left: 0; }
+        .cr-periodo select.modern-select { min-width: 0 !important; }
+    }
+</style>
+
+@* ---------- Encabezado ---------- *@
+<div class="page-header-row">
+    <div class="page-header-left">
+        <div class="page-header-title-wrap">
+            <h1 class="modern-page-title">Cola de Resúmenes</h1>
+            @if (Model.PeriodoVencimiento.HasValue)
+            {
+                <span class="badge-total-registros"><i class="fa fa-calendar"></i> Vence @Model.PeriodoVencimiento.Value.ToString("dd/MM/yyyy")</span>
+            }
+        </div>
+        <p class="modern-page-subtitle">Estado de la generación de resúmenes y de la cola de envío por mail, con el detalle de cada error.</p>
+    </div>
+    <div class="page-header-actions">
+        @if (Model.PeriodoId.HasValue)
+        {
+            <button type="button" class="btn btn-default btn-sm" onclick="enviarPrueba()" title="Mandar resúmenes reales solo a las casillas de prueba">
+                <i class="fa fa-flask"></i> Enviar prueba
+            </button>
+        }
+        <form method="get" class="cr-periodo">
+            <label for="periodoId">Período</label>
+            <select id="periodoId" name="periodoId" class="form-control modern-select" onchange="this.form.submit()">
+                @foreach (var p in Model.Periodos)
+                {
+                    <option value="@p.Id" selected="@(p.Id == Model.PeriodoId)">@p.Descripcion</option>
+                }
+            </select>
+            <button type="submit" class="btn-icon-reload" title="Actualizar"><i class="fa fa-refresh"></i></button>
+        </form>
+    </div>
+</div>
+
+@* ---------- Estado del envío ---------- *@
+<div class="cr-estado @modoClase">
+    <div class="cr-estado-icono"><i class="fa @modoIcono"></i></div>
+    <div class="cr-estado-texto">
+        <p class="cr-estado-titulo">@modoTitulo</p>
+        <p class="cr-estado-sub">@modoTexto</p>
+    </div>
+    <div class="cr-estado-meta">
+        <div class="cr-meta-item">
+            <span class="cr-meta-label">Generación</span>
+            <span class="cr-meta-valor">
+                @if (Model.GeneracionActiva)
+                {
+                    <span class="badge-pill badge-pill-green">Activa</span>
+                }
+                else
+                {
+                    <span class="badge-pill badge-pill-slate">Inactiva</span>
+                }
+                @if (Model.DiaGeneracion.HasValue)
+                {
+                    <span style="margin-left: 4px;">día @Model.DiaGeneracion</span>
+                }
+            </span>
+        </div>
+        <div class="cr-meta-item">
+            <span class="cr-meta-label">Última sin errores</span>
+            <span class="cr-meta-valor">@(Model.UltimaGeneracionExitosa?.ToString("dd/MM/yyyy HH:mm") ?? "Nunca")</span>
+        </div>
+        @if (Model.ProximoReintento.HasValue)
+        {
+            <div class="cr-meta-item">
+                <span class="cr-meta-label">Próximo reintento</span>
+                <span class="cr-meta-valor">@Model.ProximoReintento.Value.ToString("dd/MM HH:mm")</span>
+            </div>
+        }
+    </div>
+</div>
+
+@if (!Model.PeriodoId.HasValue)
+{
+    <div class="modern-card"><p class="text-muted" style="margin: 0;">Todavía no hay períodos cargados.</p></div>
+}
+else
+{
+    @* ---------- KPIs ---------- *@
+    <div class="cr-kpis">
+        <div class="cr-kpi-grupo gen">
+            <div class="cr-kpi-grupo-head">
+                <span class="cr-kpi-grupo-titulo"><i class="fa fa-file-pdf-o"></i> Generación</span>
+                <span class="cr-kpi-grupo-total">@totalGeneracion usuarios</span>
+            </div>
+            <div class="cr-kpi-grid">
+                <div class="cr-kpi @(Model.Generados == 0 ? "cero" : "")" onclick="filtrarGeneracion('@EstadosGeneracion.Generado')">
+                    <div class="cr-kpi-top"><span class="cr-kpi-numero">@Model.Generados</span><span class="cr-kpi-chip chip-green"><i class="fa fa-check"></i></span></div>
+                    <div class="cr-kpi-label">Generados</div>
+                </div>
+                <div class="cr-kpi @(Model.FallidosGeneracion == 0 ? "cero" : "alerta")" onclick="filtrarGeneracion('@EstadosGeneracion.Fallido')">
+                    <div class="cr-kpi-top"><span class="cr-kpi-numero">@Model.FallidosGeneracion</span><span class="cr-kpi-chip chip-red"><i class="fa fa-exclamation"></i></span></div>
+                    <div class="cr-kpi-label">Con error</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="cr-kpi-grupo env">
+            <div class="cr-kpi-grupo-head">
+                <span class="cr-kpi-grupo-titulo"><i class="fa fa-envelope-o"></i> Envío por mail</span>
+                <span class="cr-kpi-grupo-total">@totalEnvio en la cola</span>
+            </div>
+            <div class="cr-kpi-grid">
+                <div class="cr-kpi @(pendientesTotal == 0 ? "cero" : "")" onclick="filtrarEnvios('@EstadosEnvio.Pendiente')">
+                    <div class="cr-kpi-top"><span class="cr-kpi-numero">@pendientesTotal</span><span class="cr-kpi-chip chip-blue"><i class="fa fa-clock-o"></i></span></div>
+                    <div class="cr-kpi-label">Pendientes</div>
+                </div>
+                <div class="cr-kpi @(Model.Enviados == 0 ? "cero" : "")" onclick="filtrarEnvios('@EstadosEnvio.Enviado')">
+                    <div class="cr-kpi-top"><span class="cr-kpi-numero">@Model.Enviados</span><span class="cr-kpi-chip chip-green"><i class="fa fa-check"></i></span></div>
+                    <div class="cr-kpi-label">Enviados</div>
+                </div>
+                <div class="cr-kpi @(Model.Reintentando == 0 ? "cero" : "")" onclick="filtrarEnvios('@EstadosEnvio.Fallido')">
+                    <div class="cr-kpi-top"><span class="cr-kpi-numero">@Model.Reintentando</span><span class="cr-kpi-chip chip-amber"><i class="fa fa-repeat"></i></span></div>
+                    <div class="cr-kpi-label">Reintentando</div>
+                </div>
+                <div class="cr-kpi @(Model.FallidosDefinitivos == 0 ? "cero" : "alerta")" onclick="filtrarEnvios('@EstadosEnvio.FallidoDefinitivo')">
+                    <div class="cr-kpi-top"><span class="cr-kpi-numero">@Model.FallidosDefinitivos</span><span class="cr-kpi-chip chip-red"><i class="fa fa-times"></i></span></div>
+                    <div class="cr-kpi-label">Fallidos</div>
+                </div>
+                <div class="cr-kpi @(Model.Omitidos == 0 ? "cero" : "")" onclick="filtrarEnvios('@EstadosEnvio.Omitido')">
+                    <div class="cr-kpi-top"><span class="cr-kpi-numero">@Model.Omitidos</span><span class="cr-kpi-chip chip-slate"><i class="fa fa-minus"></i></span></div>
+                    <div class="cr-kpi-label">Omitidos</div>
+                </div>
+                <div class="cr-kpi @(Model.EnviosPrueba == 0 ? "cero" : "")" onclick="filtrarEnvios('', true)">
+                    <div class="cr-kpi-top"><span class="cr-kpi-numero">@Model.EnviosPrueba</span><span class="cr-kpi-chip chip-purple"><i class="fa fa-flask"></i></span></div>
+                    <div class="cr-kpi-label">De prueba</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* ---------- Desgloses ---------- *@
+    <div class="cr-desgloses">
+        <div class="cr-desglose">
+            <p class="cr-desglose-titulo"><i class="fa fa-exclamation-circle"></i> Errores de envío por código</p>
+            @if (!Model.ErroresPorCodigo.Any())
+            {
+                <div class="cr-vacio"><i class="fa fa-check-circle"></i> Sin errores de envío</div>
+            }
+            @foreach (var c in Model.ErroresPorCodigo)
+            {
+                <div class="cr-fila" onclick="filtrarEnvios('', false, '@c.Clave')" title="Ver estos envíos">
+                    <code>@c.Clave</code><span class="badge-pill badge-pill-red">@c.Cantidad</span>
+                </div>
+            }
+        </div>
+        <div class="cr-desglose">
+            <p class="cr-desglose-titulo"><i class="fa fa-minus-circle"></i> Omitidos por motivo</p>
+            @if (!Model.OmitidosPorMotivo.Any())
+            {
+                <div class="cr-vacio"><i class="fa fa-check-circle"></i> Sin envíos omitidos</div>
+            }
+            @foreach (var c in Model.OmitidosPorMotivo)
+            {
+                <div class="cr-fila" onclick="filtrarEnvios('@EstadosEnvio.Omitido', false, '@c.Clave')" title="Ver estos envíos">
+                    <code>@c.Clave</code><span class="badge-pill badge-pill-slate">@c.Cantidad</span>
+                </div>
+            }
+        </div>
+        <div class="cr-desglose">
+            <p class="cr-desglose-titulo"><i class="fa fa-file-text-o"></i> Errores de generación por código</p>
+            @if (!Model.FallosGeneracionPorCodigo.Any())
+            {
+                <div class="cr-vacio"><i class="fa fa-check-circle"></i> Sin errores de generación</div>
+            }
+            @foreach (var c in Model.FallosGeneracionPorCodigo)
+            {
+                <div class="cr-fila" onclick="filtrarGeneracion('@EstadosGeneracion.Fallido', '@c.Clave')" title="Ver estos usuarios">
+                    <code>@c.Clave</code><span class="badge-pill badge-pill-red">@c.Cantidad</span>
+                </div>
+            }
+        </div>
+    </div>
+
+    @* ---------- Detalle ---------- *@
+    <div class="modern-card has-custom-toolbar">
+        <ul class="cr-tabs" role="tablist">
+            <li class="active"><a href="#tabEnvios" data-toggle="tab"><i class="fa fa-envelope-o"></i> Envíos <span class="cr-tab-num">@totalEnvio</span></a></li>
+            <li><a href="#tabGeneracion" data-toggle="tab"><i class="fa fa-file-pdf-o"></i> Generación <span class="cr-tab-num">@totalGeneracion</span></a></li>
+            <li><a href="#tabEjecuciones" data-toggle="tab"><i class="fa fa-history"></i> Ejecuciones <span class="cr-tab-num">@Model.Ejecuciones.Count</span></a></li>
+        </ul>
+
+        <div class="tab-content">
+            @* ----- Envíos ----- *@
+            <div class="tab-pane active" id="tabEnvios">
+                <form id="formEnvios" class="card-toolbar cr-toolbar">
+                    <input type="hidden" name="periodoId" value="@Model.PeriodoId" />
+                    <input type="hidden" name="codigoError" id="envioCodigoError" />
+                    <div class="card-toolbar-left">
+                        <div class="modern-search-wrapper">
+                            <i class="fa fa-search modern-search-icon"></i>
+                            <input type="text" name="buscar" class="form-control modern-search-input" placeholder="Buscar por mail o DNI..." />
+                        </div>
+                    </div>
+                    <div class="card-toolbar-right">
+                        <span id="envioFiltroCodigo" class="badge-pill badge-pill-red cr-filtro-activo" style="display: none;" title="Quitar filtro" onclick="filtrarEnvios($('#envioEstado').val())"></span>
+                        <select name="estado" id="envioEstado" class="form-control modern-select" onchange="cargarEnvios()">
+                            <option value="">Estado: Todos</option>
+                            <option value="@EstadosEnvio.Pendiente">Pendiente</option>
+                            <option value="@EstadosEnvio.Enviando">Enviando</option>
+                            <option value="@EstadosEnvio.Enviado">Enviado</option>
+                            <option value="@EstadosEnvio.Fallido">Reintentando</option>
+                            <option value="@EstadosEnvio.FallidoDefinitivo">Fallido</option>
+                            <option value="@EstadosEnvio.Omitido">Omitido</option>
+                        </select>
+                        <label class="cr-check"><input type="checkbox" name="incluirPruebas" id="envioIncluirPruebas" value="true" onchange="cargarEnvios()" /> Incluir pruebas</label>
+                        <button type="submit" class="btn btn-primary cr-btn"><i class="fa fa-search"></i> Buscar</button>
+                        @if (Model.FallidosDefinitivos > 0)
+                        {
+                            <button type="button" class="btn btn-warning cr-btn" onclick="reintentarFallidos()">
+                                <i class="fa fa-repeat"></i> Reintentar fallidos (@Model.FallidosDefinitivos)
+                            </button>
+                        }
+                    </div>
+                </form>
+                <div id="listadoEnvios"></div>
+            </div>
+
+            @* ----- Generación ----- *@
+            <div class="tab-pane" id="tabGeneracion">
+                <form id="formGeneracion" class="card-toolbar cr-toolbar">
+                    <input type="hidden" name="periodoId" value="@Model.PeriodoId" />
+                    <input type="hidden" name="codigoError" id="generacionCodigoError" />
+                    <div class="card-toolbar-left">
+                        <div class="modern-search-wrapper">
+                            <i class="fa fa-search modern-search-icon"></i>
+                            <input type="text" name="buscar" class="form-control modern-search-input" placeholder="Buscar por mail, DNI o tarjeta..." />
+                        </div>
+                    </div>
+                    <div class="card-toolbar-right">
+                        <span id="generacionFiltroCodigo" class="badge-pill badge-pill-red cr-filtro-activo" style="display: none;" title="Quitar filtro" onclick="filtrarGeneracion($('#generacionEstado').val())"></span>
+                        <select name="estado" id="generacionEstado" class="form-control modern-select" onchange="cargarGeneracion()">
+                            <option value="">Estado: Todos</option>
+                            <option value="@EstadosGeneracion.Generado">Generado</option>
+                            <option value="@EstadosGeneracion.Fallido">Con error</option>
+                        </select>
+                        <button type="submit" class="btn btn-primary cr-btn"><i class="fa fa-search"></i> Buscar</button>
+                    </div>
+                </form>
+                <div id="listadoGeneracion"></div>
+            </div>
+
+            @* ----- Ejecuciones ----- *@
+            <div class="tab-pane" id="tabEjecuciones">
+                <div class="table-responsive">
+                    <table class="table table-hover modern-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Proceso</th>
+                                <th>Inicio</th>
+                                <th>Duración</th>
+                                <th>Estado</th>
+                                <th class="text-center">Total</th>
+                                <th class="text-center">OK</th>
+                                <th class="text-center">Error</th>
+                                <th class="text-center">Omitidos</th>
+                                <th>Servidor</th>
+                                <th>Error general</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (!Model.Ejecuciones.Any())
+                            {
+                                <tr><td colspan="11" class="text-center text-muted" style="padding: 24px;">No hay ejecuciones registradas para este período.</td></tr>
+                            }
+                            @foreach (var e in Model.Ejecuciones)
+                            {
+                                var pill = e.Estado == EstadosEjecucion.Completado ? "badge-pill-green"
+                                    : e.Estado == EstadosEjecucion.EnCurso ? "badge-pill-blue"
+                                    : e.Estado == EstadosEjecucion.CompletadoConErrores ? "badge-pill-purple"
+                                    : "badge-pill-red";
+                                var duracion = e.FechaFin.HasValue ? (e.FechaFin.Value - e.FechaInicio) : (TimeSpan?)null;
+                                <tr>
+                                    <td class="text-muted">@e.Id</td>
+                                    <td>
+                                        @if (e.Codigo == CodigosProceso.GenerarResumen)
+                                        {
+                                            <span><i class="fa fa-file-pdf-o text-muted"></i> Generación</span>
+                                        }
+                                        else
+                                        {
+                                            <span><i class="fa fa-envelope-o text-muted"></i> Envío</span>
+                                        }
+                                    </td>
+                                    <td>@e.FechaInicio.ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td>@(duracion.HasValue ? $"{(int)duracion.Value.TotalHours:00}:{duracion.Value.Minutes:00}:{duracion.Value.Seconds:00}" : "en curso")</td>
+                                    <td><span class="badge-pill @pill">@e.Estado</span></td>
+                                    <td class="text-center">@e.Total</td>
+                                    <td class="text-center">@e.Exitosos</td>
+                                    <td class="text-center">@(e.Fallidos > 0 ? Html.Raw($"<strong class=\"text-red\">{e.Fallidos}</strong>") : Html.Raw("0"))</td>
+                                    <td class="text-center">@e.Omitidos</td>
+                                    <td class="text-muted">@e.Servidor</td>
+                                    <td style="max-width: 360px;"><span class="cr-pre text-muted">@e.ErrorGeneral</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <modal title="Detalle del envío" callback-modal="true" function="verEnvio" load-url="/Reportes/ColaResumenes/_DetalleEnvio/" size="Large"></modal>
+    <modal title="Detalle de la generación" callback-modal="true" function="verGeneracion" load-url="/Reportes/ColaResumenes/_DetalleGeneracion/" size="Large"></modal>
+}
+
+@section scripts {
+    <script>
+        var generacionCargada = false;
+        var cargando = '<div class="text-center" style="padding: 40px 0; color: #94a3b8;"><i class="fa fa-spinner fa-spin fa-2x"></i><p style="margin-top: 8px;">Cargando...</p></div>';
+
+        function cargarEnvios() {
+            $('#listadoEnvios').html(cargando);
+            $.post('@Url.Action("_ListadoEnvios", "ColaResumenes")', $('#formEnvios').serialize())
+                .done(function (data) { $('#listadoEnvios').html(data); })
+                .fail(function (xhr) { $('#listadoEnvios').html('<div class="alert alert-danger">No se pudo cargar el listado: ' + xhr.status + ' ' + xhr.statusText + '</div>'); });
+        }
+
+        function cargarGeneracion() {
+            generacionCargada = true;
+            $('#listadoGeneracion').html(cargando);
+            $.post('@Url.Action("_ListadoGeneracion", "ColaResumenes")', $('#formGeneracion').serialize())
+                .done(function (data) { $('#listadoGeneracion').html(data); })
+                .fail(function (xhr) { $('#listadoGeneracion').html('<div class="alert alert-danger">No se pudo cargar el listado: ' + xhr.status + ' ' + xhr.statusText + '</div>'); });
+        }
+
+        function filtrarEnvios(estado, incluirPruebas, codigo) {
+            $('a[href="#tabEnvios"]').tab('show');
+            $('#envioEstado').val(estado || '');
+            $('#envioIncluirPruebas').prop('checked', !!incluirPruebas);
+            $('#envioCodigoError').val(codigo || '');
+            if (codigo) { $('#envioFiltroCodigo').html(codigo + ' <i class="fa fa-times"></i>').css('display', 'inline-flex'); } else { $('#envioFiltroCodigo').hide(); }
+            cargarEnvios();
+        }
+
+        function filtrarGeneracion(estado, codigo) {
+            generacionCargada = true; // evita la carga automática al mostrar la pestaña
+            $('a[href="#tabGeneracion"]').tab('show');
+            $('#generacionEstado').val(estado || '');
+            $('#generacionCodigoError').val(codigo || '');
+            if (codigo) { $('#generacionFiltroCodigo').html(codigo + ' <i class="fa fa-times"></i>').css('display', 'inline-flex'); } else { $('#generacionFiltroCodigo').hide(); }
+            cargarGeneracion();
+        }
+
+        function reintentarEnvio(id) {
+            Swal.fire({
+                title: '¿Reintentar este envío?',
+                text: 'El envío vuelve a quedar Pendiente. Solo se manda si el modo de envío lo permite.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Reintentar',
+                cancelButtonText: 'Cancelar'
+            }).then(function (r) {
+                if (!r.isConfirmed) return;
+                $.post('@Url.Action("ReintentarEnvio", "ColaResumenes")', { id: id }, function (res) {
+                    Swal.fire(res.ok ? 'Listo' : 'No se pudo', res.mensaje, res.ok ? 'success' : 'warning');
+                    if (res.ok) cargarEnvios();
+                });
+            });
+        }
+
+        // ---- Prueba controlada: solo a EnvioResumen:EmailsPrueba ----
+        var emailsPrueba = @Html.Raw(Newtonsoft.Json.JsonConvert.SerializeObject(
+            (Model.EmailsPrueba ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).Where(x => x.Contains("@")).ToList()));
+
+        function escapeHtml(text) {
+            if (text === null || text === undefined) return '';
+            return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function enviarPrueba() {
+            if (!emailsPrueba.length) {
+                Swal.fire('Sin casillas de prueba', 'Configurá EnvioResumen:EmailsPrueba en appsettings.json.', 'warning');
+                return;
+            }
+            var lista = emailsPrueba.map(function (e) { return '<li><strong>' + escapeHtml(e) + '</strong></li>'; }).join('');
+            Swal.fire({
+                title: 'Enviar prueba',
+                html: '<div style="text-align: left; font-size: 14px;">' +
+                      '<p>Se toman resúmenes reales de este período y se mandan <strong>solo</strong> a:</p>' +
+                      '<ul style="margin: 0 0 12px 18px;">' + lista + '</ul>' +
+                      '<p style="margin-bottom: 6px;">Ningún cliente recibe nada. ¿Cuántos resúmenes querés mandar a cada casilla?</p></div>',
+                input: 'select',
+                inputOptions: { '1': '1 resumen (' + emailsPrueba.length + ' mails)', '2': '2 resúmenes (' + (emailsPrueba.length * 2) + ' mails)', '3': '3 resúmenes (' + (emailsPrueba.length * 3) + ' mails)' },
+                inputValue: '1',
+                showCancelButton: true,
+                confirmButtonText: '<i class="fa fa-paper-plane"></i> Enviar',
+                cancelButtonText: 'Cancelar',
+                showLoaderOnConfirm: true,
+                allowOutsideClick: function () { return !Swal.isLoading(); },
+                preConfirm: function (cantidad) {
+                    return $.post('@Url.Action("EnviarPrueba", "ColaResumenes")', { periodoId: '@Model.PeriodoId', cantidad: cantidad })
+                        .then(function (res) { return res; },
+                              function (xhr) { Swal.showValidationMessage('Error ' + xhr.status + ': ' + xhr.statusText); });
+                }
+            }).then(function (r) {
+                if (!r.isConfirmed || !r.value) return;
+                var res = r.value;
+                if (!res.ok) { Swal.fire('No se pudo', res.mensaje, 'warning'); return; }
+
+                var filas = res.resultados.map(function (x) {
+                    var estado = x.ok
+                        ? '<span class="badge-pill badge-pill-green">Enviado</span>'
+                        : '<span class="badge-pill badge-pill-red">' + escapeHtml(x.codigo || 'Error') + (x.http ? ' · ' + x.http : '') + '</span>';
+                    var detalle = x.ok
+                        ? '<span class="text-muted">Id: ' + escapeHtml(x.messageId || '-') + '</span>'
+                        : '<pre style="white-space: pre-wrap; word-break: break-word; font-size: 11px; max-height: 140px; overflow: auto; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 6px; padding: 6px; margin: 4px 0 0;">' + escapeHtml(x.error) + '</pre>';
+                    return '<tr><td style="text-align: left;">' + escapeHtml(x.destino) + '<div style="font-size: 11px; color: #94a3b8;">resumen de ' + escapeHtml(x.cliente) + '</div></td>' +
+                           '<td style="text-align: left;">' + estado + detalle + '</td></tr>';
+                }).join('');
+
+                Swal.fire({
+                    title: res.mensaje,
+                    icon: res.resultados.every(function (x) { return x.ok; }) ? 'success' : 'warning',
+                    width: 760,
+                    html: '<table class="table modern-table" style="font-size: 13px;"><thead><tr><th>Destino</th><th>Resultado</th></tr></thead><tbody>' + filas + '</tbody></table>'
+                }).then(function () { filtrarEnvios('', true); });
+            });
+        }
+
+        function reintentarFallidos() {
+            Swal.fire({
+                title: '¿Reintentar todos los fallidos?',
+                text: 'Todos los envíos fallidos de este período vuelven a quedar Pendientes. Solo se mandan si el modo de envío lo permite.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Reintentar todos',
+                cancelButtonText: 'Cancelar'
+            }).then(function (r) {
+                if (!r.isConfirmed) return;
+                $.post('@Url.Action("ReintentarFallidos", "ColaResumenes")', { periodoId: '@Model.PeriodoId' }, function (res) {
+                    Swal.fire(res.ok ? 'Listo' : 'No se pudo', res.mensaje, res.ok ? 'success' : 'warning')
+                        .then(function () { if (res.ok) location.reload(); });
+                });
+            });
+        }
+
+        $(document).ready(function () {
+            if (!$('#formEnvios').length) return;
+
+            $('#formEnvios').on('submit', function (e) { e.preventDefault(); cargarEnvios(); });
+            $('#formGeneracion').on('submit', function (e) { e.preventDefault(); cargarGeneracion(); });
+
+            // La pestaña de generación se carga recién cuando se abre
+            $('a[href="#tabGeneracion"]').on('shown.bs.tab', function () {
+                if (!generacionCargada) { generacionCargada = true; cargarGeneracion(); }
+            });
+
+            // Al abrir, mostrar primero lo que necesita atención
+            @if (Model.FallidosDefinitivos > 0)
+            {
+                @:filtrarEnvios('@EstadosEnvio.FallidoDefinitivo');
+            }
+            else if (Model.Reintentando > 0)
+            {
+                @:filtrarEnvios('@EstadosEnvio.Fallido');
+            }
+            else
+            {
+                @:cargarEnvios();
+            }
+        });
+    </script>
+}

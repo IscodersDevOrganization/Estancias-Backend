@@ -112,7 +112,13 @@ namespace DAL.Data
         public DbSet<LogProcedimientos> LogProcedimientos { get; set; }
         public DbSet<LogResumenesTarjetas> LogResumenesTarjetas { get; set; }
         public DbSet<ResumenTarjeta> ResumenTarjeta { get; set; }
-        public DbSet<DistribucionResumen> DistribucionResumen { get; set; }
+        public DbSet<DistribucionResumen> DistribucionResumen { get; set; } // Obsoleta: reemplazada por EnvioResumenMail
+
+        //Cola de generación y envío de resúmenes
+        public DbSet<EjecucionProceso> EjecucionProceso { get; set; }
+        public DbSet<ResumenGeneracion> ResumenGeneracion { get; set; }
+        public DbSet<EnvioResumenMail> EnvioResumenMail { get; set; }
+        public DbSet<EnvioResumenMailIntento> EnvioResumenMailIntento { get; set; }
 
         //Pre Resgitro de Categorias
         public DbSet<PreRegistroCategorias> PreRegistroCategorias { get; set; }
@@ -162,6 +168,41 @@ namespace DAL.Data
                 .HasOne(c => c.Clientes)
                 .WithOne(u => u.Usuario)
                 .HasForeignKey<Clientes>(x => x.UsuarioId);
+
+            // --- Cola de generación y envío de resúmenes ---
+            builder.Entity<EjecucionProceso>()
+                .HasIndex(x => new { x.Codigo, x.PeriodoId });
+            builder.Entity<EjecucionProceso>()
+                .HasOne(x => x.Periodo).WithMany().HasForeignKey(x => x.PeriodoId).OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<ResumenGeneracion>()
+                .HasIndex(x => new { x.PeriodoId, x.UsuarioId }).IsUnique();
+            builder.Entity<ResumenGeneracion>()
+                .HasOne(x => x.Periodo).WithMany().HasForeignKey(x => x.PeriodoId).OnDelete(DeleteBehavior.Restrict);
+            builder.Entity<ResumenGeneracion>()
+                .HasOne(x => x.Usuario).WithMany().HasForeignKey(x => x.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+            builder.Entity<ResumenGeneracion>()
+                .HasOne(x => x.ResumenTarjeta).WithMany().HasForeignKey(x => x.ResumenTarjetaId).OnDelete(DeleteBehavior.Restrict);
+            builder.Entity<ResumenGeneracion>()
+                .HasOne(x => x.EjecucionProceso).WithMany().HasForeignKey(x => x.EjecucionProcesoId).OnDelete(DeleteBehavior.Restrict);
+
+            // Un solo envío real por resumen (los envíos de prueba pueden repetirse)
+            builder.Entity<EnvioResumenMail>()
+                .HasIndex(x => x.ResumenTarjetaId).IsUnique().HasFilter("[EsPrueba] = 0");
+            builder.Entity<EnvioResumenMail>()
+                .HasIndex(x => new { x.Estado, x.ProximoIntento });
+            builder.Entity<EnvioResumenMail>()
+                .HasOne(x => x.ResumenTarjeta).WithMany().HasForeignKey(x => x.ResumenTarjetaId).OnDelete(DeleteBehavior.Restrict);
+            builder.Entity<EnvioResumenMail>()
+                .HasOne(x => x.Periodo).WithMany().HasForeignKey(x => x.PeriodoId).OnDelete(DeleteBehavior.Restrict);
+            builder.Entity<EnvioResumenMail>()
+                .HasOne(x => x.Usuario).WithMany().HasForeignKey(x => x.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+
+            // Historial de intentos de envío (se borra junto con su envío)
+            builder.Entity<EnvioResumenMailIntento>()
+                .HasOne(x => x.EnvioResumenMail).WithMany(x => x.HistorialIntentos).HasForeignKey(x => x.EnvioResumenMailId).OnDelete(DeleteBehavior.Cascade);
+            builder.Entity<EnvioResumenMailIntento>()
+                .HasIndex(x => x.Fecha);
         }
 
 

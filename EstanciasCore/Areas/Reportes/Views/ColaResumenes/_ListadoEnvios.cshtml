@@ -1,0 +1,125 @@
+﻿@model List<DAL.DTOs.Reportes.EnvioItemDTO>
+@using DAL.Models
+@{
+    Layout = null;
+    int maximo = ViewBag.MaximoFilas ?? 5000;
+
+    string PillEstado(string estado)
+    {
+        switch (estado)
+        {
+            case EstadosEnvio.Enviado: return "badge-pill-green";
+            case EstadosEnvio.Pendiente: return "badge-pill-blue";
+            case EstadosEnvio.Enviando: return "badge-pill-blue";
+            case EstadosEnvio.Fallido: return "badge-pill-purple";
+            case EstadosEnvio.FallidoDefinitivo: return "badge-pill-red";
+            default: return "badge-pill-slate";
+        }
+    }
+
+    string TextoEstado(string estado)
+    {
+        switch (estado)
+        {
+            case EstadosEnvio.Fallido: return "Reintentando";
+            case EstadosEnvio.FallidoDefinitivo: return "Fallido";
+            default: return estado;
+        }
+    }
+
+    string Recortar(string texto, int largo) =>
+        string.IsNullOrEmpty(texto) ? "" : (texto.Length <= largo ? texto : texto.Substring(0, largo) + "…");
+}
+
+@if (Model.Count >= maximo)
+{
+    <div class="alert alert-warning">Se muestran los últimos @maximo registros. Usá los filtros para acotar la búsqueda.</div>
+}
+
+<div class="table-responsive">
+    <table id="tablaEnvios" class="table table-hover modern-table" style="width: 100%;">
+        <thead>
+            <tr>
+                <th>Cliente</th>
+                <th>DNI</th>
+                <th>Estado</th>
+                <th class="text-center">Intentos</th>
+                <th>Último intento</th>
+                <th>Enviado / próximo</th>
+                <th>Error</th>
+                <th class="text-center" style="width: 80px;"></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var e in Model)
+            {
+                <tr>
+                    <td>
+                        <span class="text-usuario-email">@e.EmailCliente</span>
+                        @if (e.EsPrueba)
+                        {
+                            <div style="margin-top: 3px;"><span class="badge-pill badge-pill-purple"><i class="fa fa-flask"></i> Prueba → @e.EmailDestino</span></div>
+                        }
+                    </td>
+                    <td><span class="badge-tarjeta-pill">@e.NroDocumento</span></td>
+                    <td data-order="@e.Estado">
+                        <span class="badge-pill @PillEstado(e.Estado)">@TextoEstado(e.Estado)</span>
+                        @if (!string.IsNullOrEmpty(e.MotivoOmision))
+                        {
+                            <div style="font-size: 11px; color: #94a3b8; margin-top: 3px;">@e.MotivoOmision</div>
+                        }
+                    </td>
+                    <td class="text-center">@e.Intentos</td>
+                    <td data-order="@(e.FechaUltimoIntento?.ToString("yyyyMMddHHmmss"))" style="white-space: nowrap;">@(e.FechaUltimoIntento?.ToString("dd/MM/yyyy HH:mm") ?? "—")</td>
+                    <td style="white-space: nowrap;">
+                        @if (e.FechaEnvio.HasValue)
+                        {
+                            <span style="color: #16a34a;"><i class="fa fa-check"></i> @e.FechaEnvio.Value.ToString("dd/MM/yyyy HH:mm")</span>
+                        }
+                        else if (e.Estado == EstadosEnvio.Fallido && e.ProximoIntento.HasValue)
+                        {
+                            <span style="color: #7c3aed;"><i class="fa fa-clock-o"></i> @e.ProximoIntento.Value.ToString("dd/MM/yyyy HH:mm")</span>
+                        }
+                        else
+                        {
+                            <span class="text-muted">—</span>
+                        }
+                    </td>
+                    <td style="max-width: 380px; word-break: break-word;">
+                        @if (!string.IsNullOrEmpty(e.CodigoErrorProveedor))
+                        {
+                            <span class="badge-pill badge-pill-red" style="margin-bottom: 3px;">@(e.CodigoErrorProveedor + (e.HttpStatus.HasValue ? " · " + e.HttpStatus : ""))</span>
+                        }
+                        @if (!string.IsNullOrEmpty(e.Error))
+                        {
+                            <div style="font-size: 11.5px; color: #64748b;" title="@Recortar(e.Error, 1500)">@Recortar(e.Error, 140)</div>
+                        }
+                    </td>
+                    <td class="text-center">
+                        <div class="action-buttons-group">
+                            <a onclick="verEnvio(@e.Id)" class="btn btn-default btn-xs" title="Ver detalle e historial de intentos"><i class="fa fa-eye"></i></a>
+                            @if (!e.EsPrueba && (e.Estado == EstadosEnvio.Fallido || e.Estado == EstadosEnvio.FallidoDefinitivo))
+                            {
+                                <a onclick="reintentarEnvio(@e.Id)" class="btn btn-warning btn-xs" title="Reintentar envío"><i class="fa fa-repeat"></i></a>
+                            }
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<script>
+    $('#tablaEnvios').DataTable({
+        "order": [],
+        "pageLength": 25,
+        "stateSave": false,
+        "responsive": false,
+        "autoWidth": false,
+        // commons_site.js fuerza render.text() en todas las columnas (escapa el HTML);
+        // acá las celdas traen pills y botones, así que se muestran tal cual.
+        "columnDefs": [{ "targets": "_all", "render": function (data) { return data; } }],
+        "language": { 'url': '@Url.Content("~/lib/arg.json")' }
+    });
+</script>

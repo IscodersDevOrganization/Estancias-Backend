@@ -75,6 +75,9 @@ namespace EstanciasCore.Interface
         /// <returns></returns>
         Task<List<ResultadoCuotasDTO>> CalcularPunitoriosResumen(List<ResultadoCuotasDTO> cuotas);
 
+        /// <summary>Calcula los punitorios como si hoy fuera fechaReferencia (simulación de resúmenes).</summary>
+        Task<List<ResultadoCuotasDTO>> CalcularPunitoriosResumen(List<ResultadoCuotasDTO> cuotas, DateTime fechaReferencia);
+
         /// <summary>
         /// Metodo que calcula el detalle de las cuotas a pagar.
         /// </summary>

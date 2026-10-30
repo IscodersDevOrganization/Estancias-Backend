@@ -1,6 +1,14 @@
-@{
+﻿@{
     ViewData["Title"] = "Reporte de Resumen de Tarjeta";
 }
+
+<div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
+    <button type="button" class="btn btn-warning btn-sm" onclick="simularResumen()" title="Generar un resumen de prueba para un cliente, sin guardar nada" style="border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; font-weight: 500;">
+        <i class="fa fa-flask"></i> Simular resumen
+    </button>
+</div>
+
+<modal title="Simular resumen" callback-modal="true" function="simularResumen" load-url="/Reportes/ResumenTarjetaReportes/_SimularResumen/" size="Large"></modal>
 
 <div class="card">
     <div class="card-header">

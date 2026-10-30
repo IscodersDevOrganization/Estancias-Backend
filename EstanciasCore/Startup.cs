@@ -78,6 +78,8 @@ namespace EstanciasCore
             services.AddHttpClient<ResendProviderService>();
             services.AddTransient<BrevoSmtpProviderService>();
             services.AddTransient<IMailService, MailService>();
+            services.AddSingleton<ColaEnvioResumenSignal>();
+            services.AddTransient<EnvioResumenService>();
 
             //Genera Resumen Mensual
             services.AddHostedService<ResumenMensualWorker>();

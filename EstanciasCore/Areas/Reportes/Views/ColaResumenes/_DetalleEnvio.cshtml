@@ -1,0 +1,105 @@
+﻿@model DAL.DTOs.Reportes.EnvioDetalleDTO
+@using DAL.Models
+@{
+    Layout = null;
+    var e = Model.Envio;
+}
+
+<style>
+    .error-exacto { white-space: pre-wrap; word-break: break-word; font-size: 12px; max-height: 260px; overflow: auto; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 8px; padding: 8px; margin: 0; }
+</style>
+
+<div class="modal-body" style="padding: 15px 20px;">
+    <div class="row">
+        <div class="col-md-6">
+            <table class="table table-condensed" style="margin-bottom: 10px;">
+                <tr><th style="width: 40%;">Cliente</th><td>@e.EmailCliente</td></tr>
+                <tr><th>Enviado a</th><td>@(e.EmailDestino ?? "-") @if (e.EsPrueba) { <span class="badge-pill badge-pill-purple">PRUEBA</span> }</td></tr>
+                <tr><th>DNI</th><td>@e.NroDocumento</td></tr>
+                <tr><th>Estado</th><td><strong>@e.Estado</strong> @if (!string.IsNullOrEmpty(e.MotivoOmision)) { <code>@e.MotivoOmision</code> }</td></tr>
+                <tr><th>Intentos</th><td>@e.Intentos</td></tr>
+            </table>
+        </div>
+        <div class="col-md-6">
+            <table class="table table-condensed" style="margin-bottom: 10px;">
+                <tr><th style="width: 40%;">En cola desde</th><td>@e.FechaCreacion.ToString("dd/MM/yyyy HH:mm:ss")</td></tr>
+                <tr><th>Último intento</th><td>@(e.FechaUltimoIntento?.ToString("dd/MM/yyyy HH:mm:ss") ?? "-")</td></tr>
+                <tr><th>Enviado</th><td>@(e.FechaEnvio?.ToString("dd/MM/yyyy HH:mm:ss") ?? "-")</td></tr>
+                <tr><th>Próximo intento</th><td>@(e.Estado == EstadosEnvio.Fallido ? (e.ProximoIntento?.ToString("dd/MM/yyyy HH:mm:ss") ?? "-") : "-")</td></tr>
+                <tr><th>Id en @(e.Proveedor ?? "proveedor")</th><td><code>@(e.ProveedorMessageId ?? "-")</code></td></tr>
+            </table>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(e.Error))
+    {
+        <h4 style="margin-top: 0;">Último error @if (e.HttpStatus.HasValue) { <small>HTTP @e.HttpStatus</small> } @if (!string.IsNullOrEmpty(e.CodigoErrorProveedor)) { <code>@e.CodigoErrorProveedor</code> }</h4>
+        <pre class="error-exacto">@e.Error</pre>
+    }
+
+    <h4>Historial de intentos</h4>
+    @if (!Model.HistorialIntentos.Any())
+    {
+        <p class="text-muted">Todavía no hubo intentos de envío.</p>
+    }
+    else
+    {
+        <table class="table modern-table" style="table-layout: fixed; width: 100%;">
+            <thead>
+                <tr style="background-color: #f4f6f9;">
+                    <th style="width: 5%;">#</th>
+                    <th style="width: 15%;">Fecha</th>
+                    <th style="width: 18%;">Destino</th>
+                    <th style="width: 9%;">Resultado</th>
+                    <th style="width: 7%;">HTTP</th>
+                    <th style="width: 8%;">Duración</th>
+                    <th style="width: 38%;">Respuesta / error exacto</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var i in Model.HistorialIntentos)
+                {
+                    <tr>
+                        <td>@i.NroIntento</td>
+                        <td>@i.Fecha.ToString("dd/MM/yyyy HH:mm:ss")</td>
+                        <td style="word-break: break-all;">@i.EmailDestino</td>
+                        <td>
+                            @if (i.Exito)
+                            {
+                                <span class="badge-pill badge-pill-green">Enviado</span>
+                            }
+                            else
+                            {
+                                <span class="badge-pill badge-pill-red">Error</span>
+                                <br /><small class="text-muted">@(i.Reintentable ? "se reintenta" : "no se reintenta")</small>
+                            }
+                        </td>
+                        <td>@(i.HttpStatus?.ToString() ?? "-")</td>
+                        <td>@i.DuracionMs ms</td>
+                        <td>
+                            @if (i.Exito)
+                            {
+                                <span class="text-muted">Id: <code>@(i.ProveedorMessageId ?? "-")</code></span>
+                            }
+                            else
+                            {
+                                if (!string.IsNullOrEmpty(i.CodigoErrorProveedor))
+                                {
+                                    <code>@i.CodigoErrorProveedor</code>
+                                }
+                                <pre class="error-exacto" style="margin-top: 4px;">@i.Error</pre>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (!e.EsPrueba && (e.Estado == EstadosEnvio.Fallido || e.Estado == EstadosEnvio.FallidoDefinitivo))
+    {
+        <div class="text-right">
+            <button type="button" class="btn btn-warning btn-sm" onclick="reintentarEnvio(@e.Id)"><i class="fa fa-repeat"></i> Reintentar envío</button>
+        </div>
+    }
+</div>

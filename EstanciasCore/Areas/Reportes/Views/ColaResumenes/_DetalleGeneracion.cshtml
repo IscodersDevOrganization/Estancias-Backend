@@ -1,0 +1,39 @@
+﻿@model DAL.DTOs.Reportes.GeneracionItemDTO
+@using DAL.Models
+@{
+    Layout = null;
+}
+
+<style>
+    .error-exacto { white-space: pre-wrap; word-break: break-word; font-size: 12px; max-height: 360px; overflow: auto; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 8px; padding: 8px; }
+</style>
+
+<div class="modal-body" style="padding: 15px 20px;">
+    <table class="table table-condensed">
+        <tr><th style="width: 25%;">Cliente</th><td>@Model.Email</td></tr>
+        <tr><th>DNI</th><td>@Model.NroDocumento</td></tr>
+        <tr><th>Tarjeta</th><td>@Model.NroTarjeta</td></tr>
+        <tr>
+            <th>Estado</th>
+            <td><span class="badge-pill @(Model.Estado == EstadosGeneracion.Generado ? "badge-pill-green" : "badge-pill-red")">@Model.Estado</span></td>
+        </tr>
+        <tr><th>Intentos</th><td>@Model.Intentos</td></tr>
+        <tr><th>Último intento</th><td>@Model.FechaUltimoIntento.ToString("dd/MM/yyyy HH:mm:ss") (ejecución #@Model.EjecucionProcesoId)</td></tr>
+        @if (Model.ResumenTarjetaId.HasValue)
+        {
+            <tr><th>Resumen</th><td>#@Model.ResumenTarjetaId</td></tr>
+        }
+    </table>
+
+    @if (!string.IsNullOrEmpty(Model.CodigoError) || !string.IsNullOrEmpty(Model.Mensaje))
+    {
+        <h4>Error <code>@Model.CodigoError</code></h4>
+        <pre class="error-exacto">@Model.Mensaje</pre>
+    }
+
+    @if (!string.IsNullOrEmpty(Model.Detalle))
+    {
+        <h4>Detalle técnico</h4>
+        <pre class="error-exacto">@Model.Detalle</pre>
+    }
+</div>

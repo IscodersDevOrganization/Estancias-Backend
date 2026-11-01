@@ -100,11 +100,36 @@ namespace EstanciasCore.Services
             return soapResult;
         }
 
+        /// <summary>
+        /// Deja solo los dígitos 0-9 del documento (saca puntos, espacios, espacios duros y caracteres invisibles).
+        /// Devuelve null si no queda un número válido.
+        /// </summary>
+        public static string NormalizarDocumento(string documento)
+        {
+            if (string.IsNullOrEmpty(documento)) return null;
+            var digitos = new string(documento.Where(c => c >= '0' && c <= '9').ToArray()).TrimStart('0');
+            return (digitos.Length == 0 || digitos.Length > 9) ? null : digitos;
+        }
+
+        /// <summary>Describe los caracteres no numéricos de un documento (para el mensaje de error).</summary>
+        public static string DescribirCaracteresInvalidos(string documento)
+        {
+            if (string.IsNullOrEmpty(documento)) return "el documento está vacío";
+            var raros = documento.Where(c => c < '0' || c > '9').Distinct()
+                .Select(c => char.IsWhiteSpace(c) || char.IsControl(c) || c > 126 ? $"U+{(int)c:X4}" : $"'{c}'")
+                .ToList();
+            return raros.Any() ? "contiene caracteres no numéricos: " + string.Join(", ", raros) : $"tiene {documento.Length} dígitos";
+        }
+
         public async Task<CombinedData> ConsultarMovimientos(string usuario, string clave, string documento, long numeroTarjeta, long cantidadMovimientos, int tipomovimientotarjeta)
         {
             var cliente = new TarjetaObtenerDatosClient();
 
-            string soapResponse = await ObtenerDatos(usuario, clave, Convert.ToInt32(documento), numeroTarjeta, cantidadMovimientos);
+            var documentoLimpio = NormalizarDocumento(documento);
+            if (documentoLimpio == null)
+                throw new FormatException($"Documento inválido '{documento}': {DescribirCaracteresInvalidos(documento)}.");
+
+            string soapResponse = await ObtenerDatos(usuario, clave, Convert.ToInt32(documentoLimpio), numeroTarjeta, cantidadMovimientos);
 
             XmlDocument xmlDoc = new XmlDocument();
             xmlDoc.LoadXml(soapResponse);
@@ -138,20 +163,29 @@ namespace EstanciasCore.Services
             var resultadosConsulta = doc.Descendants(ns + "resultadoServicioWeb")
                                 .Select(m => new Detail()
                                 {
-                                    Resultado = m.Element(ns + "resultado").Value,
-                                    Mensaje = m.Element(ns + "mensaje").Value,
+                                    Resultado = (string)m.Element(ns + "resultado"),
+                                    Mensaje = (string)m.Element(ns + "mensaje"),
                                 }).FirstOrDefault();
 
+            // Si el WS no responde EXITO se devuelve su resultado y su mensaje EXACTOS
+            // (ej.: FRACASO / "El documento es obligatoria"), en lugar de un mensaje genérico.
             CombinedData combinedResults = new CombinedData()
             {
-                Detalle = new Detail()
-                {
-                    Resultado = "ERROR",
-                    Mensaje = "Error al traer los movimientos."
-                }
+                Detalle = resultadosConsulta != null
+                    ? new Detail()
+                    {
+                        Resultado = string.IsNullOrWhiteSpace(resultadosConsulta.Resultado) ? "ERROR" : resultadosConsulta.Resultado,
+                        Mensaje = string.IsNullOrWhiteSpace(resultadosConsulta.Mensaje) ? "El WS no informó un mensaje." : resultadosConsulta.Mensaje
+                    }
+                    : new Detail()
+                    {
+                        Resultado = "ERROR",
+                        Mensaje = "La respuesta del WS no trae 'resultadoServicioWeb'. Respuesta recibida: " +
+                                  (soapResponse.Length > 1500 ? soapResponse.Substring(0, 1500) + "..." : soapResponse)
+                    }
             };
 
-            if (resultadosConsulta.Resultado=="EXITO")
+            if (resultadosConsulta != null && resultadosConsulta.Resultado=="EXITO")
             {
                 detalles = doc.Descendants(ns + "TarjetaObtenerDatosResult")
                                                .Select(m => new Detail()
@@ -519,6 +553,46 @@ namespace EstanciasCore.Services
 
 
 
+
+        #region Saldo a pagar (fuente única: cobranzas de la API de consulta de LOAN)
+
+        /// <summary>
+        /// Obtiene las cobranzas (cuotas pendientes con punitorios calculados por LOAN) de un documento.
+        /// Misma lógica que usaba /Core/MovimientoTarjeta: se toma el sexo de ObtenerPersona y,
+        /// si con "F" no hay cobranzas, se reintenta con "M".
+        /// La usan /Core/MovimientoTarjeta y la generación/simulación de resúmenes, para que el saldo sea el mismo.
+        /// </summary>
+        public async Task<ResponseObtenerConsultaDTO> ObtenerConsultaCobranzasAsync(string nroDocumento)
+        {
+            string letraSexo = "F";
+            var datosPersona = await ObtenerPersona(nroDocumento);
+            if (datosPersona != null && datosPersona.Persona != null && datosPersona.Persona.Sexo != null)
+            {
+                if (datosPersona.Persona.Sexo.Id == 2)
+                {
+                    letraSexo = "M";
+                }
+            }
+
+            var consulta = await ObtenerConsulta(nroDocumento, letraSexo);
+            if ((consulta == null || consulta.cobranzas == null || !consulta.cobranzas.Any()) && letraSexo == "F")
+            {
+                consulta = await ObtenerConsulta(nroDocumento, "M");
+            }
+            return consulta;
+        }
+
+        /// <summary>
+        /// Cobranzas que integran el saldo a pagar: las que vencen hasta el último día del mes de fechaReferencia.
+        /// </summary>
+        public static List<CobranzaDto> CobranzasDelSaldo(ResponseObtenerConsultaDTO consulta, DateTime fechaReferencia)
+        {
+            if (consulta == null || consulta.cobranzas == null) return new List<CobranzaDto>();
+            var finDeMes = new DateTime(fechaReferencia.Year, fechaReferencia.Month, DateTime.DaysInMonth(fechaReferencia.Year, fechaReferencia.Month));
+            return consulta.cobranzas.Where(x => x.fechaVencimiento.Date <= finDeMes).ToList();
+        }
+
+        #endregion
 
         #region Métodos Para Resumen Tarjeta    
         //Métodos Para Resumen Tarjeta        

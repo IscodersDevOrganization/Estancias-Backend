@@ -30,6 +30,12 @@ namespace EstanciasCore.Interface
         Task<ResultadoGeneracionResumen> GenerarResumenTarjetas(CancellationToken cancellationToken = default(CancellationToken));
 
         /// <summary>
+        /// Vuelve a generar SOLO los resúmenes que quedaron con error (ResumenGeneracion = Fallido) en un período.
+        /// Misma lógica que la generación mensual. Se registra como ejecución "RegenerarFallidos".
+        /// </summary>
+        Task<ResultadoGeneracionResumen> RegenerarFallidosAsync(int periodoId, CancellationToken cancellationToken = default(CancellationToken));
+
+        /// <summary>
         /// Genera el resumen de un usuario para un período con la MISMA lógica que la generación mensual,
         /// pero NO guarda nada: devuelve el PDF con la marca de agua "SIMULACIÓN".
         /// fechaGeneracion reemplaza a "hoy" (mes de las cuotas y corte de mora de los punitorios).

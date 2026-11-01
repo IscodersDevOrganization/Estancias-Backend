@@ -90,6 +90,8 @@
     .chip-slate { background: #f1f5f9; color: #64748b; }
     .chip-purple { background: #f5f3ff; color: #7c3aed; }
     .cr-kpi.alerta { border-color: #fecaca; background: #fff5f5; }
+    .cr-regenerar { width: 100%; margin-top: 10px; border-radius: 8px !important; display: flex !important; align-items: center; justify-content: center; gap: 6px; font-weight: 500; }
+    .cr-regenerar.en-curso { font-size: 12px; color: #2563eb; background: #eff6ff; border: 1px solid #dbeafe; padding: 7px 10px; }
     .cr-kpi.alerta .cr-kpi-numero { color: #dc2626; }
 
     /* --- Desgloses --- */
@@ -224,6 +226,16 @@ else
                     <div class="cr-kpi-label">Con error</div>
                 </div>
             </div>
+            @if (Model.GeneracionEnCurso)
+            {
+                <div class="cr-regenerar en-curso"><i class="fa fa-spinner fa-spin"></i> Generación en curso · actualizá para ver el avance</div>
+            }
+            else if (Model.FallidosGeneracion > 0 && !Model.PeriodoVencido)
+            {
+                <button type="button" class="btn btn-danger btn-sm cr-regenerar" onclick="regenerarConError()">
+                    <i class="fa fa-repeat"></i> Regenerar los @Model.FallidosGeneracion con error
+                </button>
+            }
         </div>
 
         <div class="cr-kpi-grupo env">
@@ -320,7 +332,7 @@ else
                     <div class="card-toolbar-left">
                         <div class="modern-search-wrapper">
                             <i class="fa fa-search modern-search-icon"></i>
-                            <input type="text" name="buscar" class="form-control modern-search-input" placeholder="Buscar por mail o DNI..." />
+                            <input type="text" id="envioBuscar" name="buscar" class="form-control modern-search-input" placeholder="Buscar por mail o DNI..." />
                         </div>
                     </div>
                     <div class="card-toolbar-right">
@@ -336,6 +348,9 @@ else
                         </select>
                         <label class="cr-check"><input type="checkbox" name="incluirPruebas" id="envioIncluirPruebas" value="true" onchange="cargarEnvios()" /> Incluir pruebas</label>
                         <button type="submit" class="btn btn-primary cr-btn"><i class="fa fa-search"></i> Buscar</button>
+                        <button type="button" class="btn btn-default cr-btn" onclick="limpiarFiltros()" title="Quitar todos los filtros de Envíos y Generación">
+                            <i class="fa fa-eraser"></i> Limpiar filtros
+                        </button>
                         @if (Model.FallidosDefinitivos > 0)
                         {
                             <button type="button" class="btn btn-warning cr-btn" onclick="reintentarFallidos()">
@@ -355,7 +370,7 @@ else
                     <div class="card-toolbar-left">
                         <div class="modern-search-wrapper">
                             <i class="fa fa-search modern-search-icon"></i>
-                            <input type="text" name="buscar" class="form-control modern-search-input" placeholder="Buscar por mail, DNI o tarjeta..." />
+                            <input type="text" id="generacionBuscar" name="buscar" class="form-control modern-search-input" placeholder="Buscar por mail, DNI o tarjeta..." />
                         </div>
                     </div>
                     <div class="card-toolbar-right">
@@ -366,6 +381,15 @@ else
                             <option value="@EstadosGeneracion.Fallido">Con error</option>
                         </select>
                         <button type="submit" class="btn btn-primary cr-btn"><i class="fa fa-search"></i> Buscar</button>
+                        <button type="button" class="btn btn-default cr-btn" onclick="limpiarFiltros()" title="Quitar todos los filtros de Envíos y Generación">
+                            <i class="fa fa-eraser"></i> Limpiar filtros
+                        </button>
+                        @if (!Model.GeneracionEnCurso && Model.FallidosGeneracion > 0 && !Model.PeriodoVencido)
+                        {
+                            <button type="button" class="btn btn-danger cr-btn" onclick="regenerarConError()">
+                                <i class="fa fa-repeat"></i> Regenerar con error (@Model.FallidosGeneracion)
+                            </button>
+                        }
                     </div>
                 </form>
                 <div id="listadoGeneracion"></div>
@@ -409,6 +433,10 @@ else
                                         {
                                             <span><i class="fa fa-file-pdf-o text-muted"></i> Generación</span>
                                         }
+                                        else if (e.Codigo == CodigosProceso.RegenerarFallidos)
+                                        {
+                                            <span><i class="fa fa-repeat text-muted"></i> Regeneración (con error)</span>
+                                        }
                                         else
                                         {
                                             <span><i class="fa fa-envelope-o text-muted"></i> Envío</span>
@@ -441,7 +469,10 @@ else
         var generacionCargada = false;
         var cargando = '<div class="text-center" style="padding: 40px 0; color: #94a3b8;"><i class="fa fa-spinner fa-spin fa-2x"></i><p style="margin-top: 8px;">Cargando...</p></div>';
 
+        var recargaSuspendida = false;
+
         function cargarEnvios() {
+            if (recargaSuspendida) return;
             $('#listadoEnvios').html(cargando);
             $.post('@Url.Action("_ListadoEnvios", "ColaResumenes")', $('#formEnvios').serialize())
                 .done(function (data) { $('#listadoEnvios').html(data); })
@@ -449,11 +480,52 @@ else
         }
 
         function cargarGeneracion() {
+            if (recargaSuspendida) return;
             generacionCargada = true;
             $('#listadoGeneracion').html(cargando);
             $.post('@Url.Action("_ListadoGeneracion", "ColaResumenes")', $('#formGeneracion').serialize())
                 .done(function (data) { $('#listadoGeneracion').html(data); })
                 .fail(function (xhr) { $('#listadoGeneracion').html('<div class="alert alert-danger">No se pudo cargar el listado: ' + xhr.status + ' ' + xhr.statusText + '</div>'); });
+        }
+
+        // Quita todos los filtros de las dos pestañas (también los que site.js guarda en el navegador)
+        // y recarga los listados una sola vez.
+        function limpiarFiltros() {
+            recargaSuspendida = true;
+            // Se borran los filtros que site.js guarda en el navegador para ESTA página.
+            // No se usa PortalFilterManager.clearCurrentPage(): además hace ajax.reload() sobre todas las tablas,
+            // y estas tablas no son por ajax (DataTables tiraba "Invalid JSON response").
+            try {
+                var ruta = (window.PortalFilterManager && window.PortalFilterManager.normalizePath)
+                    ? window.PortalFilterManager.normalizePath()
+                    : (location.pathname || '').toLowerCase().replace(/\/index\/?$/, '').replace(/\/+$/, '');
+                var prefijo = 'portal_flt_' + ruta + '_';
+                [window.sessionStorage, window.localStorage].forEach(function (almacen) {
+                    var borrar = [];
+                    for (var i = 0; i < almacen.length; i++) {
+                        var clave = almacen.key(i);
+                        if (clave && (clave.indexOf(prefijo) === 0 ||
+                            (clave.indexOf('DataTables_') === 0 && clave.slice(-(ruta.length + 1)) === '_' + ruta))) {
+                            borrar.push(clave);
+                        }
+                    }
+                    borrar.forEach(function (clave) { almacen.removeItem(clave); });
+                });
+            } catch (e) { }
+
+            $('#envioBuscar, #generacionBuscar').val('');
+            $('#envioEstado, #generacionEstado').val('');
+            $('#envioIncluirPruebas').prop('checked', false);
+            $('#envioCodigoError, #generacionCodigoError').val('');
+            $('#envioFiltroCodigo, #generacionFiltroCodigo').hide();
+            recargaSuspendida = false;
+
+            cargarEnvios();
+            if (generacionCargada) cargarGeneracion();
+
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({ toast: true, position: 'top-end', icon: 'info', title: 'Filtros limpiados', showConfirmButton: false, timer: 2000 });
+            }
         }
 
         function filtrarEnvios(estado, incluirPruebas, codigo) {
@@ -547,6 +619,25 @@ else
                     width: 760,
                     html: '<table class="table modern-table" style="font-size: 13px;"><thead><tr><th>Destino</th><th>Resultado</th></tr></thead><tbody>' + filas + '</tbody></table>'
                 }).then(function () { filtrarEnvios('', true); });
+            });
+        }
+
+        function regenerarConError() {
+            Swal.fire({
+                title: '¿Regenerar los resúmenes con error?',
+                html: 'Se vuelven a generar <strong>solo</strong> los @Model.FallidosGeneracion clientes con error de este período, con la misma lógica que la generación mensual.<br/><br/>' +
+                      'Corre en segundo plano y puede tardar. <strong>No se envía ningún mail</strong>: los resúmenes nuevos quedan en la cola como el resto.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: '<i class="fa fa-repeat"></i> Regenerar',
+                cancelButtonText: 'Cancelar'
+            }).then(function (r) {
+                if (!r.isConfirmed) return;
+                $('.cr-regenerar, button[onclick="regenerarConError()"]').prop('disabled', true);
+                $.post('@Url.Action("RegenerarConError", "ColaResumenes")', { periodoId: '@Model.PeriodoId' }, function (res) {
+                    Swal.fire(res.ok ? 'Regeneración lanzada' : 'No se pudo', res.mensaje, res.ok ? 'success' : 'warning')
+                        .then(function () { location.reload(); });
+                });
             });
         }
 

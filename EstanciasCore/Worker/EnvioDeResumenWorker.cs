@@ -293,7 +293,7 @@ public class EnvioDeResumenWorker : BackgroundService
             var periodoId = ejecucion.PeriodoId;
 
             bool generacionEnCurso = await context.EjecucionProceso.AnyAsync(e =>
-                e.Codigo == CodigosProceso.GenerarResumen && e.PeriodoId == periodoId && e.Estado == EstadosEjecucion.EnCurso);
+                (e.Codigo == CodigosProceso.GenerarResumen || e.Codigo == CodigosProceso.RegenerarFallidos) && e.PeriodoId == periodoId && e.Estado == EstadosEjecucion.EnCurso);
             if (generacionEnCurso) continue;
 
             var conteo = await context.EnvioResumenMail.AsNoTracking()

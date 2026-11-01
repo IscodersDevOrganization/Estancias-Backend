@@ -7,6 +7,8 @@ using EstanciasCore.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -77,6 +79,7 @@ public class ColaResumenesController : EstanciasCoreController
         {
             panel.PeriodoDescripcion = periodo.Descripcion;
             panel.PeriodoVencimiento = periodo.FechaVencimiento;
+            panel.PeriodoVencido = periodo.FechaVencimiento.Date < DateTime.Today;
             if (!panel.Periodos.Any(p => p.Id == periodo.Id))
                 panel.Periodos.Insert(0, new PeriodoOpcionDTO { Id = periodo.Id, Descripcion = periodo.Descripcion, FechaVencimiento = periodo.FechaVencimiento });
         }
@@ -130,6 +133,8 @@ public class ColaResumenesController : EstanciasCoreController
             .OrderBy(e => e.ProximoIntento)
             .Select(e => e.ProximoIntento)
             .FirstOrDefaultAsync();
+
+        panel.GeneracionEnCurso = await HayGeneracionEnCursoAsync(periodoId.Value);
 
         panel.Ejecuciones = await _context.EjecucionProceso.AsNoTracking()
             .Where(e => e.PeriodoId == periodoId.Value)
@@ -225,6 +230,27 @@ public class ColaResumenesController : EstanciasCoreController
 
         if (item == null) return NotFound("No se encontró el registro de generación.");
         return PartialView(item);
+    }
+
+    /// <summary>
+    /// Devuelve el PDF guardado de un resumen (ResumenTarjeta) para verlo dentro de la app o descargarlo.
+    /// </summary>
+    [HttpGet]
+    public async Task<IActionResult> VerPdf(int id, bool descargar = false)
+    {
+        var resumen = await _context.ResumenTarjeta.AsNoTracking()
+            .Where(r => r.Id == id)
+            .Select(r => new { r.Adjunto, Documento = r.Usuario.Personas.NroDocumento, r.FechaVencimiento })
+            .FirstOrDefaultAsync();
+
+        if (resumen == null) return NotFound("No se encontró el resumen.");
+        if (resumen.Adjunto == null || resumen.Adjunto.Length == 0) return NotFound("El resumen no tiene PDF guardado.");
+
+        var nombre = $"Resumen_{resumen.Documento}_{resumen.FechaVencimiento:yyyyMM}.pdf";
+        if (descargar) return File(resumen.Adjunto, "application/pdf", nombre);
+
+        Response.Headers["Content-Disposition"] = $"inline; filename=\"{nombre}\"";
+        return File(resumen.Adjunto, "application/pdf");
     }
 
     [HttpGet]
@@ -348,6 +374,63 @@ public class ColaResumenesController : EstanciasCoreController
             mensaje = $"{enviados} de {resultados.Count} mails de prueba enviados.",
             resultados
         });
+    }
+
+    /// <summary>
+    /// Vuelve a generar, en segundo plano, SOLO los resúmenes que quedaron con error en el período.
+    /// No envía mails: los resúmenes que se generen entran a la cola como cualquier otro.
+    /// </summary>
+    [HttpPost]
+    public async Task<IActionResult> RegenerarConError(int periodoId,
+        [FromServices] Microsoft.Extensions.DependencyInjection.IServiceScopeFactory scopeFactory,
+        [FromServices] Microsoft.AspNetCore.Hosting.IApplicationLifetime lifetime)
+    {
+        var periodo = await _context.Periodo.AsNoTracking().FirstOrDefaultAsync(p => p.Id == periodoId);
+        if (periodo == null)
+            return Json(new { ok = false, mensaje = "No se encontró el período." });
+
+        if (periodo.FechaVencimiento.Date < DateTime.Today)
+            return Json(new { ok = false, mensaje = "El período ya venció: no se regeneran resúmenes de períodos vencidos." });
+
+        if (await HayGeneracionEnCursoAsync(periodoId))
+            return Json(new { ok = false, mensaje = "Ya hay una generación en curso para este período. Esperá a que termine." });
+
+        var conError = await _context.ResumenGeneracion.AsNoTracking()
+            .CountAsync(g => g.PeriodoId == periodoId && g.Estado == EstadosGeneracion.Fallido);
+        if (conError == 0)
+            return Json(new { ok = false, mensaje = "No hay resúmenes con error en este período." });
+
+        var usuario = User?.Identity?.Name;
+        var token = lifetime.ApplicationStopping;
+
+        // Corre en segundo plano con su propio scope: la generación puede tardar y no debe depender del request
+        _ = Task.Run(async () =>
+        {
+            using (var scope = scopeFactory.CreateScope())
+            {
+                var logger = scope.ServiceProvider.GetService<Microsoft.Extensions.Logging.ILogger<ColaResumenesController>>();
+                try
+                {
+                    logger?.LogInformation("Regeneración de resúmenes con error del período {PeriodoId} lanzada por {Usuario}.", periodoId, usuario);
+                    var servicio = scope.ServiceProvider.GetRequiredService<EstanciasCore.Interface.IResumenTarjetaService>();
+                    await servicio.RegenerarFallidosAsync(periodoId, token);
+                }
+                catch (Exception ex)
+                {
+                    logger?.LogError(ex, "Falló la regeneración de resúmenes con error del período {PeriodoId}.", periodoId);
+                }
+            }
+        });
+
+        return Json(new { ok = true, mensaje = $"Se lanzó la regeneración de {conError} resúmenes con error. Vas a ver el avance en la pestaña Ejecuciones." });
+    }
+
+    private Task<bool> HayGeneracionEnCursoAsync(int periodoId)
+    {
+        return _context.EjecucionProceso.AsNoTracking().AnyAsync(e =>
+            e.PeriodoId == periodoId &&
+            e.Estado == EstadosEjecucion.EnCurso &&
+            (e.Codigo == CodigosProceso.GenerarResumen || e.Codigo == CodigosProceso.RegenerarFallidos));
     }
 
     private List<string> LeerEmailsPrueba()

@@ -3,6 +3,25 @@
 @using DAL.DTOs.Servicios
 @using EstanciasCore.Services
 @model TempalteResumenDTO
+@inject Microsoft.AspNetCore.Hosting.IHostingEnvironment Env
+@functions {
+    // Las imágenes del encabezado se incrustan en el PDF (data URI) desde wwwroot/images.
+    // Antes se descargaban de http://portalestancias.com.ar y, desde que el sitio redirige a https,
+    // iText no las podía bajar y el resumen salía sin logo. Se cachean para no leer el archivo en cada resumen.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _imagenesResumen =
+        new System.Collections.Concurrent.ConcurrentDictionary<string, string>();
+
+    private string ImagenResumen(string archivo)
+    {
+        return _imagenesResumen.GetOrAdd(archivo, a =>
+        {
+            var ruta = System.IO.Path.Combine(Env.WebRootPath ?? "", "images", a);
+            if (System.IO.File.Exists(ruta))
+                return "data:image/png;base64," + Convert.ToBase64String(System.IO.File.ReadAllBytes(ruta));
+            return "https://portalestancias.com.ar/images/" + Uri.EscapeDataString(a);
+        });
+    }
+}
 @{
     Layout = null;
     // Se define la cultura de Argentina para usarla en el formato de moneda.
@@ -121,9 +140,9 @@
 </head>
 <body>
     <div class="banner-superior">
-        <img src="http://portalestancias.com.ar/images/logo%20horizontal.png" alt="Logo Banco Nación" class="logo-banco" />
+        <img src="@Html.Raw(ImagenResumen("logo horizontal.png"))" alt="Logo Estancias" class="logo-banco" />
 
-        <img src="http://portalestancias.com.ar/images/TarjetaEstancia.png" alt="Tarjeta Mastercard" class="imagen-tarjeta" />
+        <img src="@Html.Raw(ImagenResumen("TarjetaEstancia.png"))" alt="Tarjeta Estancias" class="imagen-tarjeta" />
     </div>
     <div class="resumen-container">
         <table class="header-table">

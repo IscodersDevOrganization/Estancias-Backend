@@ -18,6 +18,8 @@ namespace DAL.DTOs.Reportes
         public bool GeneracionActiva { get; set; }
         public int? DiaGeneracion { get; set; }
         public DateTime? UltimaGeneracionExitosa { get; set; }
+        public bool GeneracionEnCurso { get; set; }
+        public bool PeriodoVencido { get; set; }
 
         // Generación
         public int Generados { get; set; }

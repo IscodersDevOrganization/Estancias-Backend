@@ -98,6 +98,15 @@ public class ResumenMensualWorker : BackgroundService
         if (hoy.Day != procedimiento.DiaEjecucion) return false;
         if (procedimiento.FechaUltimaEjecucionExitosa.HasValue && procedimiento.FechaUltimaEjecucionExitosa.Value.Date == hoy) return false;
 
+        // Si hay una generación o regeneración manual en curso, se espera al próximo ciclo
+        bool enCurso = await context.EjecucionProceso.AnyAsync(e =>
+            (e.Codigo == CodigosProceso.GenerarResumen || e.Codigo == CodigosProceso.RegenerarFallidos) && e.Estado == EstadosEjecucion.EnCurso, stoppingToken);
+        if (enCurso)
+        {
+            _logger.LogInformation("Generación de resúmenes: hay una ejecución en curso, se espera al próximo ciclo.");
+            return false;
+        }
+
         // Intentos contados en la base (antes estaban en memoria y se perdían al reiniciar la app)
         var maxIntentos = _configuration.GetValue<int>("ProcesoResumen:MaxIntentosPorDia", 3);
         var intentosHoy = await context.EjecucionProceso
@@ -124,7 +133,7 @@ public class ResumenMensualWorker : BackgroundService
             {
                 var context = scope.ServiceProvider.GetRequiredService<EstanciasContext>();
                 var colgadas = await context.EjecucionProceso
-                    .Where(e => e.Codigo == CodigosProceso.GenerarResumen && e.Estado == EstadosEjecucion.EnCurso)
+                    .Where(e => (e.Codigo == CodigosProceso.GenerarResumen || e.Codigo == CodigosProceso.RegenerarFallidos) && e.Estado == EstadosEjecucion.EnCurso)
                     .ToListAsync();
 
                 foreach (var e in colgadas)

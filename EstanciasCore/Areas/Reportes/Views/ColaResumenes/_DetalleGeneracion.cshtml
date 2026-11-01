@@ -2,38 +2,82 @@
 @using DAL.Models
 @{
     Layout = null;
+    var tienePdf = Model.ResumenTarjetaId.HasValue;
+    var urlPdf = tienePdf ? Url.Action("VerPdf", "ColaResumenes", new { area = "Reportes", id = Model.ResumenTarjetaId }) : null;
+    var urlDescarga = tienePdf ? Url.Action("VerPdf", "ColaResumenes", new { area = "Reportes", id = Model.ResumenTarjetaId, descargar = true }) : null;
 }
 
 <style>
+    @@media (min-width: 768px) {
+        .modal-dialog { width: 92% !important; max-width: 1280px !important; }
+    }
+    .dg-layout { display: grid; grid-template-columns: 340px 1fr; gap: 18px; align-items: start; }
+    .dg-layout.sin-pdf { grid-template-columns: 1fr; }
+    .dg-datos .table > tbody > tr > th { width: 38%; color: #475569; font-weight: 600; font-size: 12.5px; border-top-color: #f1f5f9; }
+    .dg-datos .table > tbody > tr > td { font-size: 13px; color: #0f172a; word-break: break-word; border-top-color: #f1f5f9; }
+    .dg-acciones { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .dg-acciones .btn { border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; }
+    .dg-visor { width: 100%; height: 72vh; border: 1px solid #e2e8f0; border-radius: 10px; background: #f1f5f9; display: block; }
+    .dg-visor-cargando { height: 72vh; border: 1px dashed #e2e8f0; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #94a3b8; }
     .error-exacto { white-space: pre-wrap; word-break: break-word; font-size: 12px; max-height: 360px; overflow: auto; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 8px; padding: 8px; }
+    @@media (max-width: 900px) {
+        .dg-layout { grid-template-columns: 1fr; }
+    }
 </style>
 
-<div class="modal-body" style="padding: 15px 20px;">
-    <table class="table table-condensed">
-        <tr><th style="width: 25%;">Cliente</th><td>@Model.Email</td></tr>
-        <tr><th>DNI</th><td>@Model.NroDocumento</td></tr>
-        <tr><th>Tarjeta</th><td>@Model.NroTarjeta</td></tr>
-        <tr>
-            <th>Estado</th>
-            <td><span class="badge-pill @(Model.Estado == EstadosGeneracion.Generado ? "badge-pill-green" : "badge-pill-red")">@Model.Estado</span></td>
-        </tr>
-        <tr><th>Intentos</th><td>@Model.Intentos</td></tr>
-        <tr><th>Último intento</th><td>@Model.FechaUltimoIntento.ToString("dd/MM/yyyy HH:mm:ss") (ejecución #@Model.EjecucionProcesoId)</td></tr>
-        @if (Model.ResumenTarjetaId.HasValue)
+<div style="padding: 4px 6px;">
+    <div class="dg-layout @(tienePdf ? "" : "sin-pdf")">
+        <div class="dg-datos">
+            <table class="table table-condensed">
+                <tr><th>Cliente</th><td>@Model.Email</td></tr>
+                <tr><th>DNI</th><td>@Model.NroDocumento</td></tr>
+                <tr><th>Tarjeta</th><td>@Model.NroTarjeta</td></tr>
+                <tr>
+                    <th>Estado</th>
+                    <td><span class="badge-pill @(Model.Estado == EstadosGeneracion.Generado ? "badge-pill-green" : "badge-pill-red")">@Model.Estado</span></td>
+                </tr>
+                <tr><th>Intentos</th><td>@Model.Intentos</td></tr>
+                <tr><th>Último intento</th><td>@Model.FechaUltimoIntento.ToString("dd/MM/yyyy HH:mm:ss")<br /><span class="text-muted" style="font-size: 11.5px;">ejecución #@Model.EjecucionProcesoId</span></td></tr>
+                @if (tienePdf)
+                {
+                    <tr><th>Resumen</th><td>#@Model.ResumenTarjetaId</td></tr>
+                }
+            </table>
+
+            @if (tienePdf)
+            {
+                <div class="dg-acciones">
+                    <a href="@urlDescarga" data-ajax="true" class="btn btn-success btn-sm"><i class="fa fa-download"></i> Descargar PDF</a>
+                    <a href="@urlPdf" target="_blank" data-ajax="true" class="btn btn-default btn-sm"><i class="fa fa-external-link"></i> Abrir en pestaña</a>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(Model.CodigoError) || !string.IsNullOrEmpty(Model.Mensaje))
+            {
+                <h4 style="margin-top: 18px;">Error <code>@Model.CodigoError</code></h4>
+                <pre class="error-exacto">@Model.Mensaje</pre>
+            }
+
+            @if (!string.IsNullOrEmpty(Model.Detalle))
+            {
+                <h4>Detalle técnico</h4>
+                <pre class="error-exacto">@Model.Detalle</pre>
+            }
+        </div>
+
+        @if (tienePdf)
         {
-            <tr><th>Resumen</th><td>#@Model.ResumenTarjetaId</td></tr>
+            <div id="dgVisor" class="dg-visor-cargando"><i class="fa fa-spinner fa-spin"></i>&nbsp; Cargando PDF...</div>
         }
-    </table>
-
-    @if (!string.IsNullOrEmpty(Model.CodigoError) || !string.IsNullOrEmpty(Model.Mensaje))
-    {
-        <h4>Error <code>@Model.CodigoError</code></h4>
-        <pre class="error-exacto">@Model.Mensaje</pre>
-    }
-
-    @if (!string.IsNullOrEmpty(Model.Detalle))
-    {
-        <h4>Detalle técnico</h4>
-        <pre class="error-exacto">@Model.Detalle</pre>
-    }
+    </div>
 </div>
+
+@if (tienePdf)
+{
+    <script>
+        // El visor se agrega después de que el modal terminó de cargar, para que el loader del modal no espere al PDF
+        setTimeout(function () {
+            $('#dgVisor').replaceWith('<iframe class="dg-visor" src="@urlPdf"></iframe>');
+        }, 50);
+    </script>
+}

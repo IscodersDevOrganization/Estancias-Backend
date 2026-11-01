@@ -180,36 +180,11 @@ namespace EstanciasCore.Areas.Core.Controllers
                     MontoPunitorios = await _datosServices.CalcularPunitorios(datosMovimientos.DetallesSolicitud);
                 }
 
-                ResponseObtenerConsultaDTO montosConPunitorios = null;
-                string letraSexo = "F";
-                var datosPersona = await _datosServices.ObtenerPersona(nroDocumento);
-                if (datosPersona != null && datosPersona.Persona != null && datosPersona.Persona.Sexo != null)
-                {
-                    if (datosPersona.Persona.Sexo.Id == 2)
-                    {
-                        letraSexo = "M";
-                    }
-                }
+                // Misma fuente y mismo criterio que el resumen de tarjeta (DatosTarjetaService)
+                ResponseObtenerConsultaDTO montosConPunitorios = await _datosServices.ObtenerConsultaCobranzasAsync(nroDocumento);
 
-                montosConPunitorios = await _datosServices.ObtenerConsulta(nroDocumento, letraSexo);
-                if ((montosConPunitorios == null || montosConPunitorios.cobranzas == null || !montosConPunitorios.cobranzas.Any()) && letraSexo == "F")
-                {
-                    montosConPunitorios = await _datosServices.ObtenerConsulta(nroDocumento, "M");
-                }
-
-                decimal totalDeudaDec = 0;
-
-                if (montosConPunitorios != null && montosConPunitorios.cobranzas != null && montosConPunitorios.cobranzas.Any())
-                {
-                    DateTime hoy = DateTime.Today;
-                    int diasEnElMes = DateTime.DaysInMonth(hoy.Year, hoy.Month);
-                    DateTime fechaActual = new DateTime(hoy.Year, hoy.Month, diasEnElMes);
-
-                    // Sumamos directamente convirtiendo a decimal (si importe no era decimal)
-                    totalDeudaDec = montosConPunitorios.cobranzas
-                        .Where(x => x.fechaVencimiento.Date <= fechaActual)
-                        .Sum(x => Convert.ToDecimal(x.importe));
-                }
+                decimal totalDeudaDec = DatosTarjetaService.CobranzasDelSaldo(montosConPunitorios, DateTime.Today)
+                    .Sum(x => Convert.ToDecimal(x.importe));
                 if (datosMovimientos.Movimientos != null)
                 {
                     comprasAgrupadas = await _datosServices.ObtieneUltimosMovimientos(datosMovimientos, 20);

@@ -75,6 +75,9 @@ namespace EstanciasCore.Interface
         /// <returns></returns>
         Task<List<ResultadoCuotasDTO>> CalcularPunitoriosResumen(List<ResultadoCuotasDTO> cuotas);
 
+        /// <summary>Cobranzas de LOAN (API de consulta) con la misma lógica de sexo F/M que /Core/MovimientoTarjeta.</summary>
+        Task<DAL.DTOs.ApiCpeCreditos.ResponseObtenerConsultaDTO> ObtenerConsultaCobranzasAsync(string nroDocumento);
+
         /// <summary>Calcula los punitorios como si hoy fuera fechaReferencia (simulación de resúmenes).</summary>
         Task<List<ResultadoCuotasDTO>> CalcularPunitoriosResumen(List<ResultadoCuotasDTO> cuotas, DateTime fechaReferencia);
 

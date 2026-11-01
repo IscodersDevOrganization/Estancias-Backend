@@ -175,6 +175,7 @@ namespace DAL.Models
     {
         public const string GenerarResumen = "GenerarResumen";
         public const string EnvioResumen = "EnvioResumen";
+        public const string RegenerarFallidos = "RegenerarFallidos";   // Regeneración manual de los que fallaron
     }
 
     public static class EstadosEjecucion
@@ -196,6 +197,8 @@ namespace DAL.Models
     {
         public const string TarjetaInvalida = "TARJETA_INVALIDA";
         public const string WsSinExito = "WS_SIN_EXITO";
+        public const string DocumentoInvalido = "DOCUMENTO_INVALIDO"; // El DNI cargado tiene caracteres no numéricos
+        public const string ConsultaLoan = "CONSULTA_LOAN";      // Falló la API de consulta de deuda (cobranzas) de LOAN
         public const string DatosNulos = "DATOS_NULOS";
         public const string SinConfiguracion = "SIN_CONFIGURACION";
         public const string Excepcion = "EXCEPCION";

@@ -249,6 +249,7 @@ public class ResumenTarjetaReportesController : EstanciasCoreController
                 detalle = r.Detalle,
                 resultadoWs = r.ResultadoWs,
                 variosClientes = usuarios.Count > 1,
+                diagnosticoConcepto = r.DiagnosticoConcepto,
                 nombre = r.Nombre,
                 documento = r.NroDocumento,
                 tarjeta = r.NroTarjeta,

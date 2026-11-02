@@ -78,6 +78,9 @@ namespace EstanciasCore.Interface
         /// <summary>Cobranzas de LOAN (API de consulta) con la misma lógica de sexo F/M que /Core/MovimientoTarjeta.</summary>
         Task<DAL.DTOs.ApiCpeCreditos.ResponseObtenerConsultaDTO> ObtenerConsultaCobranzasAsync(string nroDocumento);
 
+        /// <summary>Créditos del cliente según LOAN (ObtenerPersona + ObtenerCreditos). Trae el Comercio de cada crédito.</summary>
+        Task<List<DAL.DTOs.ApiCpeCreditos.Credito>> ObtenerCreditosPorDocumentoAsync(string nroDocumento);
+
         /// <summary>Calcula los punitorios como si hoy fuera fechaReferencia (simulación de resúmenes).</summary>
         Task<List<ResultadoCuotasDTO>> CalcularPunitoriosResumen(List<ResultadoCuotasDTO> cuotas, DateTime fechaReferencia);
 

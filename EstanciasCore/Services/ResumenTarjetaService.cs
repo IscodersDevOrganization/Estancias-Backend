@@ -245,6 +245,7 @@ public class ResumenTarjetaService : IResumenTarjetaService
         public string NroComprobante { get; set; }
         public DateTime FechaResumen { get; set; }
         public string ResultadoWs { get; set; }
+        public string DiagnosticoConcepto { get; set; }
     }
 
     /// <summary>
@@ -252,6 +253,10 @@ public class ResumenTarjetaService : IResumenTarjetaService
     /// Lo usan la generación mensual (con fechaGeneracion = ahora, igual que siempre) y la simulación.
     /// fechaGeneracion define hasta qué vencimientos entran (fin de ese mes). Los importes y punitorios los calcula LOAN al momento de la consulta.
     /// </summary>
+    /// <summary>Comercio (compañía) por número de operación, compartido entre clientes y corridas: evita repetir la consulta a LOAN.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> ComerciosPorOperacion =
+        new System.Collections.Concurrent.ConcurrentDictionary<string, string>();
+
     private static async Task<ResumenConstruido> ConstruirResumenAsync(IServiceProvider serviceProvider, UsuarioParaProcesarDTO usuario, DatosEstructura datosEstructura, Periodo periodo, DateTime fechaGeneracion)
     {
         var documentoLimpio = DatosTarjetaService.NormalizarDocumento(usuario.NroDocumento);
@@ -323,13 +328,99 @@ public class ResumenTarjetaService : IResumenTarjetaService
         var cobranzas = DatosTarjetaService.CobranzasDelSaldo(consulta, fechaGeneracion);
         var solicitudesWs = datosMovimientos.DetallesSolicitud ?? new List<SolicitudDetail>();
 
+        // --- CONCEPTO de cada cuota: nombre del comercio ---
+        // 1) El SOAP (DetallesSolicitud), comparando el número de solicitud sin ceros ni espacios.
+        // 2) Si falta, LOAN obtenerDetalleOperacion (campo compania), con caché por operación.
+        // 3) Si todavía falta, LOAN ObtenerCreditos (campo Comercio).
+        // 4) Último recurso: el texto de la cobranza ("cuota N del credito ... por un monto de ...").
+        string ClaveSolicitud(string numero) => new string((numero ?? "").Where(ch => ch >= '0' && ch <= '9').ToArray()).TrimStart('0');
+
+        var solicitudesPorClave = solicitudesWs
+            .GroupBy(s => ClaveSolicitud(s.NumeroSolicitud))
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var comercios = solicitudesWs
+            .Where(s => !string.IsNullOrWhiteSpace(s.NombreComercio))
+            .GroupBy(s => ClaveSolicitud(s.NumeroSolicitud))
+            .ToDictionary(g => g.Key, g => g.First().NombreComercio.Trim());
+
+        var diagnostico = new List<string>
+        {
+            $"SOAP DetallesSolicitud: {solicitudesWs.Count} solicitudes" +
+            (solicitudesWs.Any() ? " → " + string.Join("; ", solicitudesWs.Take(40).Select(s => $"'{s.NumeroSolicitud}' = '{s.NombreComercio}'")) : "")
+        };
+
+        // 2) Caché de comercios ya resueltos (el comercio de una operación no cambia) y LOAN obtenerDetalleOperacion → "compania"
+        foreach (var numero in cobranzas.Select(c => ClaveSolicitud(c.numero.ToString())).Distinct())
+            if (!comercios.ContainsKey(numero) && ComerciosPorOperacion.TryGetValue(numero, out var enCache))
+                comercios[numero] = enCache;
+
+        var operacionesSinComercio = cobranzas.Select(c => c.numero.ToString()).Distinct()
+            .Where(n => !comercios.ContainsKey(ClaveSolicitud(n))).ToList();
+        if (operacionesSinComercio.Any())
+        {
+            var erroresDetalle = new System.Collections.Concurrent.ConcurrentBag<string>();
+            var encontrados = new System.Collections.Concurrent.ConcurrentDictionary<string, string>();
+            using (var limite = new SemaphoreSlim(4))
+            {
+                await Task.WhenAll(operacionesSinComercio.Select(async numero =>
+                {
+                    await limite.WaitAsync();
+                    try
+                    {
+                        var detalleOp = await datosServices.ObtenerOperacionDetalles(numero);
+                        if (!string.IsNullOrWhiteSpace(detalleOp?.Compania))
+                            encontrados[ClaveSolicitud(numero)] = detalleOp.Compania.Trim();
+                    }
+                    catch (Exception ex) { erroresDetalle.Add($"{numero}: {ex.InnerException?.Message ?? ex.Message}"); }
+                    finally { limite.Release(); }
+                }));
+            }
+            foreach (var item in encontrados)
+            {
+                comercios[item.Key] = item.Value;
+                ComerciosPorOperacion[item.Key] = item.Value;
+            }
+            diagnostico.Add($"LOAN obtenerDetalleOperacion: {encontrados.Count} de {operacionesSinComercio.Count} con compañía" +
+                (encontrados.Any() ? " → " + string.Join("; ", encontrados.Select(e => $"'{e.Key}' = '{e.Value}'")) : "") +
+                (erroresDetalle.Any() ? Environment.NewLine + "  Errores: " + string.Join("; ", erroresDetalle.Take(10)) : ""));
+        }
+
+        // 3) LOAN ObtenerCreditos (Comercio), solo para lo que todavía falte
+        if (cobranzas.Any(c => !comercios.ContainsKey(ClaveSolicitud(c.numero.ToString()))))
+        {
+            try
+            {
+                var creditosLoan = await datosServices.ObtenerCreditosPorDocumentoAsync(documentoLimpio);
+                diagnostico.Add($"LOAN ObtenerCreditos: {creditosLoan.Count} créditos" +
+                    (creditosLoan.Any() ? " → " + string.Join("; ", creditosLoan.Take(40).Select(cr => $"IdSolicitud {cr.IdSolicitud} / Operacion '{cr.Operacion}' = '{cr.Comercio}'")) : ""));
+
+                foreach (var credito in creditosLoan.Where(cr => !string.IsNullOrWhiteSpace(cr.Comercio)))
+                {
+                    // El número de la cuota puede corresponder al IdSolicitud o a la Operacion del crédito
+                    foreach (var clave in new[] { ClaveSolicitud(credito.IdSolicitud.ToString()), ClaveSolicitud(credito.Operacion) })
+                        if (!string.IsNullOrEmpty(clave) && !comercios.ContainsKey(clave)) comercios[clave] = credito.Comercio.Trim();
+                }
+            }
+            catch (Exception ex)
+            {
+                // Si LOAN no responde, se usa el texto de la cobranza: el resumen no se frena por el concepto
+                diagnostico.Add("LOAN ObtenerCreditos falló: " + (ex.InnerException?.Message ?? ex.Message));
+            }
+        }
+
+        var sinComercio = cobranzas.Select(c => c.numero.ToString()).Distinct().Where(n => !comercios.ContainsKey(ClaveSolicitud(n))).ToList();
+        string diagnosticoConcepto = sinComercio.Any()
+            ? $"Cuotas sin nombre de comercio (solicitud): {string.Join(", ", sinComercio)}.{Environment.NewLine}" + string.Join(Environment.NewLine, diagnostico)
+            : null;
+
         var cuotasResumen = cobranzas
             .OrderBy(c => c.numero)
             .ThenBy(c => c.fechaVencimiento)
             .Select(c =>
             {
-                // Del SOAP solo se toman el nombre del comercio y la cantidad total de cuotas de la solicitud
-                var solicitud = solicitudesWs.FirstOrDefault(s => s.NumeroSolicitud == c.numero.ToString());
+                var clave = ClaveSolicitud(c.numero.ToString());
+                solicitudesPorClave.TryGetValue(clave, out var solicitud);
                 int totalCuotas = (solicitud?.DetallesCuota != null && solicitud.DetallesCuota.Any())
                     ? solicitud.DetallesCuota.Max(d => int.TryParse(d.NumeroCuota, out var n) ? n : 0)
                     : cobranzas.Where(x => x.numero == c.numero).Max(x => x.numeroCuota);
@@ -337,7 +428,7 @@ public class ResumenTarjetaService : IResumenTarjetaService
                 return new ResultadoCuotasDTO
                 {
                     Codigo = c.numero.ToString(),
-                    Descripcion = !string.IsNullOrWhiteSpace(solicitud?.NombreComercio) ? solicitud.NombreComercio : (c.detalle ?? ""),
+                    Descripcion = comercios.TryGetValue(clave, out var comercio) ? comercio : (c.detalle ?? ""),
                     Fecha = c.fechaVencimiento.ToString("dd/MM/yyyy"),
                     NumeroCuota = c.numeroCuota.ToString(),
                     NumeroCuotaTotal = Math.Max(totalCuotas, c.numeroCuota).ToString(),
@@ -352,6 +443,26 @@ public class ResumenTarjetaService : IResumenTarjetaService
             return new ResumenConstruido { CodigoError = CodigosErrorGeneracion.DatosNulos, Mensaje = "PrepararDatosResumen no devolvió datos para el usuario.", ResultadoWs = "EXITO" };
         }
 
+        // --- CUOTAS DEL MES vs. DEUDA ANTERIOR ---
+        // PrepararDatosResumen corta por la fecha de vencimiento del período (día 15), pero las cuotas de LOAN
+        // vencen el día 10: la cuota del mes quedaba como "deuda anterior" y "Cuotas del mes" salía vacío.
+        // Regla: son del mes las cuotas que vencen en el mes de vencimiento del resumen;
+        // son deuda anterior las que vencieron en meses anteriores. El total a pagar no cambia.
+        var inicioMesVencimiento = new DateTime(periodo.FechaVencimiento.Year, periodo.FechaVencimiento.Month, 1);
+        Func<ResultadoCuotasDTO, DateTime> fechaCuota = c =>
+            DateTime.TryParseExact(c.Fecha, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var f) ? f : DateTime.MinValue;
+        Func<ResultadoCuotasDTO, decimal> montoCuota = c =>
+            decimal.TryParse(c.Monto, NumberStyles.Number, culturaAR, out var m) ? m : 0m;
+
+        var cuotasAnteriores = cuotasResumen.Where(c => fechaCuota(c) < inicioMesVencimiento).ToList();
+        var cuotasDelMes = cuotasResumen.Where(c => fechaCuota(c) >= inicioMesVencimiento).ToList();
+
+        datosParaResumenDTO.ConsumosAnteriores = cuotasAnteriores;
+        datosParaResumenDTO.ConsumosDelMes = cuotasDelMes;
+        datosParaResumenDTO.SaldoPendiente = cuotasAnteriores.Sum(montoCuota);
+        datosParaResumenDTO.SaldoActual = cuotasDelMes.Sum(montoCuota);
+        datosParaResumenDTO.SaldoTotal = datosParaResumenDTO.SaldoPendiente + datosParaResumenDTO.SaldoActual;
+
         var html = await datosServices.RenderViewToStringAsync("ResumenBancarioTemplate", datosParaResumenDTO);
 
         byte[] pdfBytes;
@@ -365,6 +476,7 @@ public class ResumenTarjetaService : IResumenTarjetaService
         {
             Ok = true,
             ResultadoWs = "EXITO",
+            DiagnosticoConcepto = diagnosticoConcepto,
             Datos = datosParaResumenDTO,
             Pdf = pdfBytes,
             FechaResumen = fechaMesActualCuotas,
@@ -472,6 +584,7 @@ public class ResumenTarjetaService : IResumenTarjetaService
 
                 var construido = await ConstruirResumenAsync(scope.ServiceProvider, usuario, datosEstructura, periodo, fechaGeneracion);
                 resultado.ResultadoWs = construido.ResultadoWs;
+                resultado.DiagnosticoConcepto = construido.DiagnosticoConcepto;
 
                 if (!construido.Ok)
                 {

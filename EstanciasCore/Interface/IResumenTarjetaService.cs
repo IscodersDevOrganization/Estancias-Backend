@@ -50,6 +50,7 @@ namespace EstanciasCore.Interface
         public string Mensaje { get; set; }
         public string Detalle { get; set; }
         public string ResultadoWs { get; set; }
+        public string DiagnosticoConcepto { get; set; }
 
         public string Nombre { get; set; }
         public string NroDocumento { get; set; }

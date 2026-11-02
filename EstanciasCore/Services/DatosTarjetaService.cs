@@ -583,6 +583,21 @@ namespace EstanciasCore.Services
         }
 
         /// <summary>
+        /// Nombre del comercio de cada crédito del cliente, según LOAN (ObtenerCreditos).
+        /// Clave: número de solicitud/crédito (IdSolicitud) sin ceros adelante. Valor: Comercio.
+        /// Se usa para el "Concepto" del resumen cuando el SOAP no trae el nombre del comercio de esa solicitud.
+        /// </summary>
+        public async Task<List<Credito>> ObtenerCreditosPorDocumentoAsync(string nroDocumento)
+        {
+            var datosPersona = await ObtenerPersona(nroDocumento);
+            if (datosPersona?.Persona == null || !int.TryParse(datosPersona.Persona.Id, out int idPersona) || idPersona == 0)
+                throw new Exception($"ObtenerPersona no devolvió un Id de persona para el documento {nroDocumento} (Id recibido: '{datosPersona?.Persona?.Id}').");
+
+            var creditos = await ObtenerCreditos(idPersona);
+            return creditos?.Credito ?? new List<Credito>();
+        }
+
+        /// <summary>
         /// Cobranzas que integran el saldo a pagar: las que vencen hasta el último día del mes de fechaReferencia.
         /// </summary>
         public static List<CobranzaDto> CobranzasDelSaldo(ResponseObtenerConsultaDTO consulta, DateTime fechaReferencia)

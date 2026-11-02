@@ -110,6 +110,7 @@
                     urlPdfActual = URL.createObjectURL(base64ABlob(r.pdf));
 
                     var html =
+                        (r.diagnosticoConcepto ? '<div class="sim-aviso" style="display:block;"><strong><i class="fa fa-search"></i> Diagnóstico del concepto</strong> <span style="font-size:11.5px;">(algunas cuotas no encontraron el nombre del comercio; copiame este texto)</span><pre style="white-space:pre-wrap;word-break:break-word;font-size:11px;max-height:220px;overflow:auto;background:transparent;border:none;color:#92400e;margin:6px 0 0;padding:0;">' + esc(r.diagnosticoConcepto) + '</pre></div>' : '') +
                         (r.variosClientes ? '<div class="sim-aviso"><i class="fa fa-users"></i><div>Hay más de un cliente con ese dato: se usó el primero. Probá con el número de tarjeta para ser más preciso.</div></div>' : '') +
                         '<div class="sim-datos">' +
                             dato('Cliente', r.nombre) +

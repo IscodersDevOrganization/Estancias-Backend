@@ -11,7 +11,6 @@ using System.Threading.Tasks;
 namespace EstanciasCore.Endpoints
 {
     [TypeFilter(typeof(EndpointUatAuthorizeAttribute))]
-    [AllowAnonymous]
     [Route("endpoint/monedas")]
     [ApiController]
     public class MonedasEndpointController : ControllerBase

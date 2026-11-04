@@ -1,4 +1,5 @@
 ﻿using DAL.DTOs.Servicios;
+using System;
 using System.Collections.Generic;
 
 namespace DAL.DTOs.Reportes
@@ -170,5 +171,20 @@ namespace DAL.DTOs.Reportes
 
         public List<ResumenDeudaResponseDTO> Data { get; set; } =
             new List<ResumenDeudaResponseDTO>();
+    }
+    public class SimularResumenTarjetaRequestDTO
+    {
+        public string DocumentoOTarjeta { get; set; } = "";
+
+        // "id:123" para un período existente o "nuevo:2026-12-15" para uno calculado.
+        public string Periodo { get; set; } = "";
+        public DateTime? FechaGeneracion { get; set; }
+    }
+
+    public class PeriodoSimulacionResumenDTO
+    {
+        public string Value { get; set; } = "";
+        public string Text { get; set; } = "";
+        public bool Selected { get; set; }
     }
 }

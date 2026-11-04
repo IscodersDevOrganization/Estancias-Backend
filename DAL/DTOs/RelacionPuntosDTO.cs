@@ -9,6 +9,7 @@ namespace DAL.DTOs
         public long Puntos { get; set; }
         public DateTime Fecha { get; set; }
         public bool Activo { get; set; }
+        public string Imagen { get; set; }
     }
 
     public class RelacionPuntosListadoDTO

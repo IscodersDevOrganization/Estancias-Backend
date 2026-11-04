@@ -66,6 +66,8 @@ namespace DAL.DTOs
 
         public int Stock { get; set; }
 
+        public int StockActual { get; set; }
+
         public long Puntos { get; set; }
 
         public int CategoriaId { get; set; }

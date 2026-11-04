@@ -510,16 +510,6 @@ namespace EstanciasCore.Endpoints
             });
         }
 
-        [HttpGet("test")]
-        public IActionResult Test()
-        {
-            return Ok(new
-            {
-                ok = true,
-                message = "Pago tarjeta endpoint funcionando"
-            });
-        }
-
         // POST: endpoint/pago-tarjeta/exportar-excel
         [HttpPost("exportar-excel")]
         public async Task<IActionResult> ExportarExcel(

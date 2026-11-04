@@ -310,6 +310,7 @@ namespace EstanciasCore.Endpoints
                 premioDB.Nombre = dto.Nombre;
                 premioDB.Descripcion = dto.Descripcion;
                 premioDB.Stock = dto.Stock;
+                premioDB.StockActual = dto.StockActual == 0 ? dto.Stock : dto.StockActual;
                 premioDB.Puntos = dto.Puntos;
                 premioDB.TerminosCondiciones = dto.TerminosCondiciones;
                 premioDB.FechaVencimiento = dto.FechaVencimiento;

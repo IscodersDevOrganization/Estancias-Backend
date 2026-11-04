@@ -6,6 +6,8 @@ using DAL.Models;
 using EstanciasCore.API.Filters;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
+using Newtonsoft.Json;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -21,13 +23,16 @@ namespace EstanciasCore.Endpoints
     {
         private readonly EstanciasContext _context;
         private readonly UserManager<Usuario> _userManager;
+        private readonly IActionDescriptorCollectionProvider _actionDescriptorCollectionProvider;
 
         public SecurityRolesEndpointController(
             EstanciasContext context,
-            UserManager<Usuario> userManager)
+            UserManager<Usuario> userManager,
+            IActionDescriptorCollectionProvider actionDescriptorCollectionProvider = null)
         {
             _context = context;
             _userManager = userManager;
+            _actionDescriptorCollectionProvider = actionDescriptorCollectionProvider;
         }
 
         // Equivalente al Index() del controller MVC.
@@ -91,120 +96,258 @@ namespace EstanciasCore.Endpoints
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] SecurityRoleCreateDTO request)
         {
+            if (request == null)
+            {
+                return BadRequest(new { ok = false, message = "Los datos del Rol son obligatorios." });
+            }
+
+            var name = request.Name;
+            var showName = request.ShowName;
+            var description = request.Description;
+            var selectedFunctionIds = request.SelectedFunctionIds == null
+                ? new List<string>() : new List<string>(request.SelectedFunctionIds);
+            var category = request.Category;
+            var selectedController = request.SelectedController;
+            var selectedRoutes = request.SelectedRoutes;
+
             try
             {
-                var role = CreateCommonsRoleInstance();
-                role.Name = request != null ? request.Name : null;
-                role.ShowName = request != null ? request.ShowName : null;
-                role.Description = request != null ? request.Description : null;
-
-                TryValidateModel(role);
-                ModelState.Remove("Id");
-
-                if (!ModelState.IsValid)
+                if (string.IsNullOrWhiteSpace(showName))
                 {
-                    return BadRequest(new
+                    if (!string.IsNullOrWhiteSpace(selectedController))
                     {
-                        ok = false,
-                        message = "Los datos del Rol no son válidos.",
-                        errors = ModelState
-                    });
+                        showName = selectedController;
+                    }
+                    else
+                    {
+                        return BadRequest(new { ok = false, message = "El nombre a mostrar es requerido." });
+                    }
                 }
 
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    name = "Default WorkSpace: " + showName.Trim();
+                }
+
+                var cat = !string.IsNullOrWhiteSpace(category) ? category.Trim() : "Gestión";
+                var cleanDesc = description?.Trim() ?? "";
+                if (cleanDesc.StartsWith("[") && cleanDesc.Contains("]"))
+                {
+                    var closeIdx = cleanDesc.IndexOf("]");
+                    cleanDesc = cleanDesc.Substring(closeIdx + 1).Trim();
+                }
+                var finalDesc = $"[{cat}]" + (!string.IsNullOrWhiteSpace(cleanDesc) ? " " + cleanDesc : "");
+
+                var role = (CommonsRole)Activator.CreateInstance(typeof(CommonsRole), true);
                 role.Id = Guid.NewGuid().ToString();
-                role.NormalizedName = role.Name != null
-                    ? role.Name.ToUpper()
-                    : null;
+                role.Name = name.Trim();
+                role.ShowName = showName.Trim();
+                role.Description = finalDesc;
+                role.NormalizedName = role.Name.ToUpper();
                 role.CreatedDate = DateTime.Now;
                 role.Enabled = true;
                 role.Show = true;
 
                 await _context.Set<CommonsRole>().AddAsync(role);
-                await _context.SaveChangesAsync();
 
+                if (selectedFunctionIds == null)
+                {
+                    selectedFunctionIds = new List<string>();
+                }
+
+                // Unificación: Si se seleccionó controlador o rutas, crear o actualizar automáticamente la función asociada
+                if (!string.IsNullOrEmpty(selectedController) || (selectedRoutes != null && selectedRoutes.Any()))
+                {
+                    var funcName = role.ShowName;
+                    var func = await _context.Set<CommonsFunction>()
+                                             .FirstOrDefaultAsync(f => f.Name == funcName && f.DeletedDate == null);
+                    if (func == null)
+                    {
+                        var routeObjs = (selectedRoutes ?? new List<string>()).Select(r => new CommonsRoute(r)).ToList();
+                        func = new CommonsFunction
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            Name = funcName,
+                            Description = $"[{cat}] Rutas del controlador {selectedController}",
+                            Display = true,
+                            Show = true,
+                            CreationDate = DateTime.Now,
+                            LastEditTime = DateTime.Now,
+                            RoutesJson = JsonConvert.SerializeObject(routeObjs)
+                        };
+                        await _context.Set<CommonsFunction>().AddAsync(func);
+                    }
+                    else if (selectedRoutes != null && selectedRoutes.Any())
+                    {
+                        var routeObjs = selectedRoutes.Select(r => new CommonsRoute(r)).ToList();
+                        func.RoutesJson = JsonConvert.SerializeObject(routeObjs);
+                        func.LastEditTime = DateTime.Now;
+                        _context.Set<CommonsFunction>().Update(func);
+                    }
+
+                    if (!selectedFunctionIds.Contains(func.Id))
+                    {
+                        selectedFunctionIds.Add(func.Id);
+                    }
+                }
+
+                // Asignar funciones seleccionadas
+                if (selectedFunctionIds != null && selectedFunctionIds.Any())
+                {
+                    foreach (var funcId in selectedFunctionIds.Distinct())
+                    {
+                        var func = await _context.Set<CommonsFunction>().FindAsync(funcId);
+                        if (func != null)
+                        {
+                            await _context.Set<CommonsRoleFunction>().AddAsync(new CommonsRoleFunction
+                            {
+                                Id = Guid.NewGuid().ToString(),
+                                Role = role,
+                                Function = func,
+                                CreationDate = DateTime.Now
+                            });
+                        }
+                    }
+                }
+
+                await _context.SaveChangesAsync();
                 return Ok(new
                 {
                     ok = true,
-                    message = "Se cargó correctamente el Rol " + role.ShowName + ".",
-                    data = MapRole(role, new List<string>())
+                    message = "Se cargó correctamente el Rol con sus funciones correspondientes.",
+                    data = MapRole(role, await GetFunctionNames(role.Id))
                 });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
-                {
-                    ok = false,
-                    message = "Hubo un error al cargar el Rol. " + ex.Message
-                });
+                return StatusCode(500, new { ok = false, message = "Hubo un error al guardar el Rol. " + ex.Message });
             }
         }
 
         // Equivalente al POST _Update() del controller MVC.
         // PUT: endpoint/security-roles/{id}
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(
-            string id,
-            [FromBody] SecurityRoleUpdateDTO request)
+        public async Task<IActionResult> Update(string id, [FromBody] SecurityRoleUpdateDTO request)
         {
+            if (request == null)
+            {
+                return BadRequest(new { ok = false, message = "Los datos del Rol son obligatorios." });
+            }
+
+            var name = request.Name;
+            var showName = request.ShowName;
+            var description = request.Description;
+            var selectedFunctionIds = request.SelectedFunctionIds == null
+                ? new List<string>() : new List<string>(request.SelectedFunctionIds);
+            var category = request.Category;
+            var selectedController = request.SelectedController;
+            var selectedRoutes = request.SelectedRoutes;
+            var enabled = request.Enabled;
+            var show = request.Show;
+
             try
             {
-                var roleToValidate = CreateCommonsRoleInstance();
-                roleToValidate.Id = id;
-                roleToValidate.Name = request != null ? request.Name : null;
-                roleToValidate.ShowName = request != null ? request.ShowName : null;
-                roleToValidate.Description = request != null ? request.Description : null;
-                roleToValidate.Enabled = request != null && request.Enabled;
-                roleToValidate.Show = request != null && request.Show;
-
-                TryValidateModel(roleToValidate);
-
-                if (!ModelState.IsValid)
-                {
-                    return BadRequest(new
-                    {
-                        ok = false,
-                        message = "Los datos del Rol no son válidos.",
-                        errors = ModelState
-                    });
-                }
-
                 var existingRole = await _context.Set<CommonsRole>().FindAsync(id);
+                if (existingRole == null) return NotFound(new { ok = false, message = "No se encontró el Rol." });
 
-                if (existingRole == null)
+                var cat = !string.IsNullOrWhiteSpace(category) ? category.Trim() : "Gestión";
+                var cleanDesc = description?.Trim() ?? "";
+                if (cleanDesc.StartsWith("[") && cleanDesc.Contains("]"))
                 {
-                    return NotFound(new
-                    {
-                        ok = false,
-                        message = "No se encontró el Rol."
-                    });
+                    var closeIdx = cleanDesc.IndexOf("]");
+                    cleanDesc = cleanDesc.Substring(closeIdx + 1).Trim();
                 }
+                var finalDesc = $"[{cat}]" + (!string.IsNullOrWhiteSpace(cleanDesc) ? " " + cleanDesc : "");
 
-                existingRole.Name = request.Name;
-                existingRole.NormalizedName = request.Name != null
-                    ? request.Name.ToUpper()
-                    : null;
-                existingRole.ShowName = request.ShowName;
-                existingRole.Description = request.Description;
-                existingRole.Enabled = request.Enabled;
-                existingRole.Show = request.Show;
+                existingRole.Name = name?.Trim();
+                existingRole.NormalizedName = name?.ToUpper()?.Trim();
+                existingRole.ShowName = showName?.Trim();
+                existingRole.Description = finalDesc;
+                existingRole.Enabled = enabled;
+                existingRole.Show = show;
 
                 _context.Set<CommonsRole>().Update(existingRole);
-                await _context.SaveChangesAsync();
 
+                if (selectedFunctionIds == null)
+                {
+                    selectedFunctionIds = new List<string>();
+                }
+
+                // Unificación: Si se seleccionó controlador o rutas, crear o actualizar automáticamente la función asociada
+                if (!string.IsNullOrEmpty(selectedController) || (selectedRoutes != null && selectedRoutes.Any()))
+                {
+                    var funcName = existingRole.ShowName;
+                    var func = await _context.Set<CommonsFunction>()
+                                             .FirstOrDefaultAsync(f => f.Name == funcName && f.DeletedDate == null);
+                    if (func == null)
+                    {
+                        var routeObjs = (selectedRoutes ?? new List<string>()).Select(r => new CommonsRoute(r)).ToList();
+                        func = new CommonsFunction
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            Name = funcName,
+                            Description = $"[{cat}] Rutas del controlador {selectedController}",
+                            Display = true,
+                            Show = true,
+                            CreationDate = DateTime.Now,
+                            LastEditTime = DateTime.Now,
+                            RoutesJson = JsonConvert.SerializeObject(routeObjs)
+                        };
+                        await _context.Set<CommonsFunction>().AddAsync(func);
+                    }
+                    else if (selectedRoutes != null && selectedRoutes.Any())
+                    {
+                        var routeObjs = selectedRoutes.Select(r => new CommonsRoute(r)).ToList();
+                        func.RoutesJson = JsonConvert.SerializeObject(routeObjs);
+                        func.LastEditTime = DateTime.Now;
+                        _context.Set<CommonsFunction>().Update(func);
+                    }
+
+                    if (!selectedFunctionIds.Contains(func.Id))
+                    {
+                        selectedFunctionIds.Add(func.Id);
+                    }
+                }
+
+                // Actualizar funciones asignadas
+                var currentFuncs = _context.Set<CommonsRoleFunction>()
+                                            .Include(rf => rf.Role)
+                                            .Include(rf => rf.Function)
+                                            .Where(rf => rf.Role.Id == id && rf.DeletedDate == null)
+                                            .ToList();
+
+                var toRemove = currentFuncs.Where(rf => !selectedFunctionIds.Contains(rf.Function.Id)).ToList();
+                _context.Set<CommonsRoleFunction>().RemoveRange(toRemove);
+
+                foreach (var funcId in selectedFunctionIds.Distinct())
+                {
+                    if (!currentFuncs.Any(rf => rf.Function.Id == funcId))
+                    {
+                        var function = await _context.Set<CommonsFunction>().FindAsync(funcId);
+                        if (function != null)
+                        {
+                            await _context.Set<CommonsRoleFunction>().AddAsync(new CommonsRoleFunction
+                            {
+                                Id = Guid.NewGuid().ToString(),
+                                Role = existingRole,
+                                Function = function,
+                                CreationDate = DateTime.Now
+                            });
+                        }
+                    }
+                }
+
+                await _context.SaveChangesAsync();
                 return Ok(new
                 {
                     ok = true,
-                    message = "Se modificó correctamente el Rol.",
-                    data = MapRole(existingRole, new List<string>())
+                    message = "Se modificó correctamente el Rol y sus funciones asociadas.",
+                    data = MapRole(existingRole, await GetFunctionNames(existingRole.Id))
                 });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
-                {
-                    ok = false,
-                    message = "Hubo un error al modificar el Rol. " + ex.Message
-                });
+                return StatusCode(500, new { ok = false, message = "Hubo un error al guardar el Rol. " + ex.Message });
             }
         }
 
@@ -496,6 +639,66 @@ namespace EstanciasCore.Endpoints
                     message = "Hubo un error al asignar las funciones. " + ex.Message
                 });
             }
+        }
+
+        // GET: endpoint/security-roles/routes
+        [HttpGet("routes")]
+        public IActionResult GetRoutes()
+        {
+            return Ok(new { ok = true, data = GetApplicationRoutesGrouped() });
+        }
+
+        private async Task<List<string>> GetFunctionNames(string roleId)
+        {
+            return await _context.Set<CommonsRoleFunction>()
+                .Where(rf => rf.Role.Id == roleId && rf.DeletedDate == null && rf.Function != null)
+                .Select(rf => rf.Function.Name)
+                .ToListAsync();
+        }
+
+        private List<SecurityRoleRouteGroupDTO> GetApplicationRoutesGrouped()
+        {
+            if (_actionDescriptorCollectionProvider == null) return new List<SecurityRoleRouteGroupDTO>();
+
+            var groups = new Dictionary<string, SecurityRoleRouteGroupDTO>();
+            foreach (var ad in _actionDescriptorCollectionProvider.ActionDescriptors.Items)
+            {
+                var controller = ad.RouteValues["controller"];
+                var action = ad.RouteValues["action"];
+                var area = ad.RouteValues.ContainsKey("area") ? ad.RouteValues["area"] : null;
+
+                var path = "";
+                if (ad.AttributeRouteInfo != null && !string.IsNullOrEmpty(ad.AttributeRouteInfo.Template))
+                {
+                    path = ad.AttributeRouteInfo.Template;
+                    if (!path.StartsWith("/")) path = "/" + path;
+                }
+                else
+                {
+                    path = (!string.IsNullOrEmpty(area) ? $"/{area}" : "") + $"/{controller}/{action}";
+                }
+
+                var key = $"{area}_{controller}";
+                if (!groups.ContainsKey(key))
+                {
+                    groups[key] = new SecurityRoleRouteGroupDTO
+                    {
+                        ControllerName = controller,
+                        AreaName = area
+                    };
+                }
+                groups[key].Routes.Add(path);
+            }
+
+            foreach (var g in groups.Values)
+            {
+                g.Routes = g.Routes.Distinct().OrderBy(r => r).ToList();
+            }
+
+            return groups.Values
+                .OrderBy(g => g.AreaName)
+                .ThenBy(g => g.ControllerName)
+                .ToList();
         }
 
         // CommonsRole tiene el constructor sin parámetros no público.

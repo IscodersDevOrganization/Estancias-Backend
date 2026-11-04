@@ -977,6 +977,164 @@ namespace EstanciasCore.Areas.Core.Endpoints
             }
         }
 
+        // POST: endpoint/proveedor/5/productos/10/imagenes
+        [HttpPost("{id}/productos/{productoId}/imagenes")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> SubirImagenesProducto(
+            int id, int productoId, [FromForm] List<IFormFile> FotoProducto)
+        {
+            try
+            {
+                var producto = await _context.Productos
+                    .FirstOrDefaultAsync(p => p.Id == productoId && p.Proveedor.Id == id);
+
+                if (producto == null)
+                    return NotFound(new { status = 404, mensaje = "No se encontró el producto del proveedor solicitado." });
+
+                foreach (var archivo in FotoProducto ?? new List<IFormFile>())
+                {
+                    if (archivo != null)
+                    {
+                        var adjunto = new ProductoAdjuntos
+                        {
+                            Nombre = Path.GetFileNameWithoutExtension(archivo.FileName),
+                            Extension = Path.GetExtension(archivo.FileName)
+                        };
+
+                        using (var memoryStream = new MemoryStream())
+                        {
+                            await archivo.CopyToAsync(memoryStream);
+                            adjunto.Producto = producto;
+                            adjunto.Foto = memoryStream.ToArray();
+                        }
+
+                        _context.ProductoAdjuntos.Add(adjunto);
+                        await _context.SaveChangesAsync();
+                    }
+                }
+
+                return Ok(new { status = 200, mensaje = "Se cargó correctamente la Foto del Producto." });
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new { status = 500, mensaje = "Hubo un error al cargar la Foto del Producto. Intentelo nuevamente mas tarde." });
+            }
+        }
+
+        // GET: endpoint/proveedor/5/productos/10/financiacion
+        [HttpGet("{id}/productos/{productoId}/financiacion")]
+        public async Task<IActionResult> GetFinanciacionProducto(int id, int productoId)
+        {
+            try
+            {
+                var producto = await _context.Productos
+                    .Include(p => p.FinanciacionProducto)
+                    .FirstOrDefaultAsync(p => p.Id == productoId && p.Proveedor.Id == id);
+
+                if (producto == null)
+                    return NotFound(new { status = 404, mensaje = "No se encontró el producto del proveedor solicitado." });
+
+                return Ok(new
+                {
+                    status = 200,
+                    mensaje = "Financiación del producto obtenida correctamente.",
+                    data = MapFinanciacionProducto(producto)
+                });
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new { status = 500, mensaje = "Hubo un error al obtener la financiación del Producto." });
+            }
+        }
+
+        // POST: endpoint/proveedor/5/productos/10/financiacion
+        [HttpPost("{id}/productos/{productoId}/financiacion")]
+        public async Task<IActionResult> CrearFinanciacionProducto(
+            int id, int productoId, [FromBody] ProveedorProductoFinanciacionCreateDTO request)
+        {
+            if (request == null)
+                return BadRequest(new { status = 400, mensaje = "Los datos de la financiación son obligatorios." });
+
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            try
+            {
+                var producto = await _context.Productos
+                    .FirstOrDefaultAsync(p => p.Id == productoId && p.Proveedor.Id == id);
+
+                if (producto == null)
+                    return NotFound(new { status = 404, mensaje = "No se encontró el producto del proveedor solicitado." });
+
+                await _context.FinanciacionProductos.AddAsync(new Financiacion
+                {
+                    CantidadCuotas = Convert.ToInt32(request.CantidadCuotasAdd),
+                    InteresesPorCuota = Convert.ToDecimal(request.InteresCoutasAdd),
+                    Producto = producto
+                });
+                await _context.SaveChangesAsync();
+
+                await _context.Entry(producto).Collection(p => p.FinanciacionProducto).LoadAsync();
+
+                return Ok(new
+                {
+                    status = 200,
+                    mensaje = "Se cargó correctamente la financiación del Producto.",
+                    data = MapFinanciacionProducto(producto)
+                });
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new { status = 500, mensaje = "Hubo un error al Cargar la Finaciación del Producto. Intentelo nuevamente mas tarde." });
+            }
+        }
+
+        // DELETE: endpoint/proveedor/productos/financiacion/15
+        [HttpDelete("productos/financiacion/{id}")]
+        public async Task<IActionResult> EliminarFinanciacionProducto(int id)
+        {
+            try
+            {
+                var financiacion = await _context.FinanciacionProductos.FindAsync(id);
+                if (financiacion == null)
+                    return NotFound(new { status = 404, mensaje = "No se encontró la financiación solicitada." });
+
+                _context.FinanciacionProductos.Remove(financiacion);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { status = 200, mensaje = "Se eliminó correctamente la financiación del Producto." });
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new { status = 500, mensaje = "Hubo un error al eliminar la financiación del Producto." });
+            }
+        }
+
+        private static ProveedorProductoFinanciacionResponseDTO MapFinanciacionProducto(Producto producto)
+        {
+            var data = new ProveedorProductoFinanciacionResponseDTO
+            {
+                ProductoId = producto.Id,
+                ProductoNombre = producto.Descripcion,
+                PrecioProducto = producto.Precio
+            };
+
+            foreach (var financiacion in producto.FinanciacionProducto)
+            {
+                data.ListaFinanciacion.Add(new FinanciacionDTO
+                {
+                    FinaciacionId = financiacion.Id,
+                    CantidadCuotas = financiacion.CantidadCuotas,
+                    InteresCuota = financiacion.InteresesPorCuota,
+                    ValorCuota = decimal.Round(
+                        (producto.Precio / financiacion.CantidadCuotas) *
+                        (1 + (financiacion.InteresesPorCuota / 100)), 2)
+                });
+            }
+
+            return data;
+        }
+
         private List<ProveedorProductoDTO> ObtenerProductosProveedor(int proveedorId)
         {
             List<Producto> productosDb = _context.Productos

@@ -2,9 +2,11 @@
 using DAL.DTOs;
 using DAL.Models;
 using EstanciasCore.API.Filters;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -64,15 +66,27 @@ namespace EstanciasCore.Endpoints
                     .OrderByDescending(r => r.Id)
                     .Skip((page - 1) * pageSize)
                     .Take(pageSize)
-                    .Select(r => new RelacionPuntosDTO
+                    .Select(r => new
                     {
-                        Id = r.Id,
-                        Monto = r.Monto,
-                        Puntos = r.Puntos,
-                        Fecha = r.Fecha,
-                        Activo = r.Activo
+                        r.Id,
+                        r.Monto,
+                        r.Puntos,
+                        r.Fecha,
+                        r.Activo,
+                        r.Imagen
                     })
                     .ToListAsync();
+
+                // La conversión se hace en memoria para no depender de su traducción SQL.
+                var data = registros.Select(r => new RelacionPuntosDTO
+                {
+                    Id = r.Id,
+                    Monto = r.Monto,
+                    Puntos = r.Puntos,
+                    Fecha = r.Fecha,
+                    Activo = r.Activo,
+                    Imagen = r.Imagen != null ? Convert.ToBase64String(r.Imagen) : null
+                }).ToList();
 
                 var totalPaginas = (int)Math.Ceiling(totalRegistros / (double)pageSize);
 
@@ -82,7 +96,7 @@ namespace EstanciasCore.Endpoints
                     PaginaActual = page,
                     CantidadPorPagina = pageSize,
                     TotalPaginas = totalPaginas,
-                    Registros = registros
+                    Registros = data
                 };
 
                 return Ok(response);
@@ -102,25 +116,36 @@ namespace EstanciasCore.Endpoints
         {
             try
             {
-                var relacion = await _context.RelacionPuntos
+                var registro = await _context.RelacionPuntos
                     .Where(r => r.Id == id)
-                    .Select(r => new RelacionPuntosDTO
+                    .Select(r => new
                     {
-                        Id = r.Id,
-                        Monto = r.Monto,
-                        Puntos = r.Puntos,
-                        Fecha = r.Fecha,
-                        Activo = r.Activo
+                        r.Id,
+                        r.Monto,
+                        r.Puntos,
+                        r.Fecha,
+                        r.Activo,
+                        r.Imagen
                     })
                     .FirstOrDefaultAsync();
 
-                if (relacion == null)
+                if (registro == null)
                 {
                     return NotFound(new
                     {
                         mensaje = "No se encontró el Registro."
                     });
                 }
+
+                var relacion = new RelacionPuntosDTO
+                {
+                    Id = registro.Id,
+                    Monto = registro.Monto,
+                    Puntos = registro.Puntos,
+                    Fecha = registro.Fecha,
+                    Activo = registro.Activo,
+                    Imagen = registro.Imagen != null ? Convert.ToBase64String(registro.Imagen) : null
+                };
 
                 return Ok(relacion);
             }
@@ -230,6 +255,49 @@ namespace EstanciasCore.Endpoints
                 return StatusCode(500, new
                 {
                     mensaje = "Hubo un error al editar el Registro. Intentelo nuevamente mas tarde."
+                });
+            }
+        }
+
+        // POST: endpoint/relacion-puntos/5/imagen
+        [HttpPost("{id}/imagen")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> SubirImagen(int id, IFormFile FotoRelacion)
+        {
+            try
+            {
+                var relacionEdit = await _context.RelacionPuntos.FindAsync(id);
+
+                if (relacionEdit == null)
+                {
+                    return NotFound(new
+                    {
+                        mensaje = "No se encontró el registro para cargar la imagen."
+                    });
+                }
+
+                if (FotoRelacion != null)
+                {
+                    using (var memoryStream = new MemoryStream())
+                    {
+                        await FotoRelacion.CopyToAsync(memoryStream);
+                        relacionEdit.Imagen = memoryStream.ToArray();
+                    }
+                }
+
+                _context.RelacionPuntos.Update(relacionEdit);
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    mensaje = "Se cargó correctamente la Imagen."
+                });
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new
+                {
+                    mensaje = "Hubo un error al cargar la Imagen. Inténtelo nuevamente más tarde."
                 });
             }
         }

@@ -21,6 +21,10 @@ namespace DAL.DTOs
         public string Name { get; set; }
         public string ShowName { get; set; }
         public string Description { get; set; }
+        public List<string> SelectedFunctionIds { get; set; }
+        public string Category { get; set; }
+        public string SelectedController { get; set; }
+        public List<string> SelectedRoutes { get; set; }
     }
 
     public class SecurityRoleUpdateDTO
@@ -30,6 +34,10 @@ namespace DAL.DTOs
         public string Description { get; set; }
         public bool Enabled { get; set; }
         public bool Show { get; set; }
+        public List<string> SelectedFunctionIds { get; set; }
+        public string Category { get; set; }
+        public string SelectedController { get; set; }
+        public List<string> SelectedRoutes { get; set; }
     }
 
     public class SecurityRoleAssignmentDTO
@@ -55,5 +63,12 @@ namespace DAL.DTOs
         public string Description { get; set; }
         public bool Display { get; set; }
         public bool Show { get; set; }
+    }
+
+    public class SecurityRoleRouteGroupDTO
+    {
+        public string ControllerName { get; set; }
+        public string AreaName { get; set; }
+        public List<string> Routes { get; set; } = new List<string>();
     }
 }

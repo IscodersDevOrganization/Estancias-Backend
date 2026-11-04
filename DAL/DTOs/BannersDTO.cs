@@ -16,6 +16,7 @@ namespace DAL.DTOs
         public DateTime? FechaHasta { get; set; }
 
         public bool LinkExterno { get; set; }
+        public bool EsCarrousel { get; set; }
         public int Orden { get; set; }
 
         public int BannersFijo { get; set; }
@@ -39,6 +40,7 @@ namespace DAL.DTOs
         public DateTime? FechaHasta { get; set; }
 
         public bool LinkExterno { get; set; }
+        public bool EsCarrousel { get; set; }
         public int Orden { get; set; }
 
         public int BannerFijo { get; set; }
@@ -68,6 +70,7 @@ namespace DAL.DTOs
         public bool Publico { get; set; }
         public string Link { get; set; }
         public bool LinkExterno { get; set; }
+        public bool EsCarrousel { get; set; }
 
         public bool BannerFijo { get; set; }
         public bool Vencimiento { get; set; }

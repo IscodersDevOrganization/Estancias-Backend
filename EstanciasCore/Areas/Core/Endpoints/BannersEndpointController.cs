@@ -44,38 +44,39 @@ namespace EstanciasCore.Areas.Core.Endpoints
 
                 buscar = buscar ?? "";
 
-                var usuario = _context.Usuarios
+                var email = User.Identity?.Name;
+
+                var usuario = await _context.Usuarios
                     .Include(x => x.Clientes)
                         .ThenInclude(x => x.Empresa)
-                    .FirstOrDefault();
+                    .FirstOrDefaultAsync(x => x.Email == email);
 
                 var query = _context.Banners
                     .Include(x => x.Marcas)
                     .AsQueryable();
 
-                /*
-                 * Respeta la lógica original:
-                 *
-                 * Si no hay usuario o no tiene empresa:
-                 * trae solo banners con Empresa == null.
-                 *
-                 * Si hay usuario con empresa:
-                 * trae solo banners de esa empresa.
-                 */             
+                if (usuario == null || usuario.Clientes?.Empresa == null)
+                {
+                    query = query.Where(x => x.Empresa == null);
+                }
+                else
+                {
                     int empresaId = usuario.Clientes.Empresa.Id;
+                    query = query.Where(x => x.Empresa.Id == empresaId);
+                }
 
+                if (!string.IsNullOrEmpty(buscar))
+                {
                     query = query.Where(x =>
-                        x.Empresa.Id == empresaId &&
-                        (
-                            ((x.Titulo ?? "").Contains(buscar)) ||
-                            ((x.Texto ?? "").Contains(buscar))
-                        ));
+                        (x.Titulo ?? "").Contains(buscar) ||
+                        (x.Texto ?? "").Contains(buscar));
+                }
 
                 var totalRegistros = await query.CountAsync();
 
                 var banners = await query
                     .OrderBy(x => x.Orden)
-                    .ThenByDescending(x => x.Id)
+                    .ThenBy(x => x.Marcas != null ? x.Marcas.Nombre : "")
                     .Skip((pagina - 1) * cantidad)
                     .Take(cantidad)
                     .Select(x => new BannerListadoDTO
@@ -91,6 +92,7 @@ namespace EstanciasCore.Areas.Core.Endpoints
                         Publico = x.Publico,
                         Link = x.Link ?? "",
                         LinkExterno = x.LinkExterno,
+                        EsCarrousel = x.EsCarrousel,
                         BannerFijo = x.BannerFijo,
                         Vencimiento = x.Vencimiento,
                         EsVideo = x.EsVideo,
@@ -155,6 +157,7 @@ namespace EstanciasCore.Areas.Core.Endpoints
                         Publico = x.Publico,
                         Link = x.Link ?? "",
                         LinkExterno = x.LinkExterno,
+                        EsCarrousel = x.EsCarrousel,
                         BannerFijo = x.BannerFijo,
                         Vencimiento = x.Vencimiento,
                         EsVideo = x.EsVideo,
@@ -243,10 +246,12 @@ namespace EstanciasCore.Areas.Core.Endpoints
                     });
                 }
 
-                var usuario = _context.Usuarios
+                var email = User.Identity?.Name;
+
+                var usuario = await _context.Usuarios
                     .Include(x => x.Clientes)
                         .ThenInclude(x => x.Empresa)
-                    .FirstOrDefault();
+                    .FirstOrDefaultAsync(x => x.Email == email);
 
                 var banner = new Banners();
 
@@ -261,6 +266,7 @@ namespace EstanciasCore.Areas.Core.Endpoints
                 banner.FechaDesde = dto.FechaDesde.HasValue ? dto.FechaDesde.Value : DateTime.Now;
                 banner.FechaHasta = dto.FechaHasta;
                 banner.LinkExterno = dto.LinkExterno;
+                banner.EsCarrousel = dto.EsCarrousel;
 
                 /*
                  * El original NO setea Orden en Create explícitamente.
@@ -367,6 +373,7 @@ namespace EstanciasCore.Areas.Core.Endpoints
                 d.Link = dto.Link;
                 d.FechaDesde = dto.FechaDesde.HasValue ? dto.FechaDesde.Value : d.FechaDesde;
                 d.LinkExterno = dto.LinkExterno;
+                d.EsCarrousel = dto.EsCarrousel;
 
                 if (dto.BannerFijo == 1)
                 {

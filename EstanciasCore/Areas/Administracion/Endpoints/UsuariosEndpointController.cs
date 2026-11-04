@@ -1,4 +1,5 @@
-﻿using Commons.Identity.Services;
+﻿using EstanciasCore.Areas.Administracion.ViewModels;
+using Commons.Identity.Services;
 using DAL.Data;
 using DAL.DTOs;
 using DAL.DTOs.Servicios;
@@ -32,13 +33,49 @@ namespace EstanciasCore.Areas.Administracion.Endpoints
         }
 
         [HttpGet("listar")]
-        public IActionResult Listar(string buscar = "", int pagina = 1, int cantidad = 10)
+        public IActionResult Listar(string buscar = "", int pagina = 1, int cantidad = 10,
+            string filtroIncobrable = null, string filtroTipoUsuario = null, string filtroRoles = null)
         {
             if (pagina <= 0) pagina = 1;
             if (cantidad <= 0) cantidad = 10;
 
-            var query = _context.Users
-                .Where(x => x.UserName != "admin@admin.com")
+            var baseQuery = _context.Users.Where(x => x.UserName != "admin@admin.com");
+
+            if (!string.IsNullOrEmpty(filtroIncobrable))
+            {
+                bool isIncobrable = filtroIncobrable == "1";
+                baseQuery = baseQuery.Where(x => x.Incobrable == isIncobrable);
+            }
+
+            if (!string.IsNullOrEmpty(filtroTipoUsuario))
+            {
+                if (filtroTipoUsuario == "comun")
+                    baseQuery = baseQuery.Where(x => x.UsuarioSucursal == false);
+                else if (filtroTipoUsuario == "sucursal")
+                    baseQuery = baseQuery.Where(x => x.UsuarioSucursal == true);
+            }
+
+            if (!string.IsNullOrEmpty(filtroRoles))
+            {
+                if (filtroRoles == "__con_roles__")
+                {
+                    var userIdsWithRoles = _context.UserRoles.Select(ur => ur.UserId).Distinct().ToList();
+                    baseQuery = baseQuery.Where(x => userIdsWithRoles.Contains(x.Id));
+                }
+                else if (filtroRoles == "__sin_roles__")
+                {
+                    var userIdsWithRoles = _context.UserRoles.Select(ur => ur.UserId).Distinct().ToList();
+                    baseQuery = baseQuery.Where(x => !userIdsWithRoles.Contains(x.Id));
+                }
+                else
+                {
+                    var userIdsForRole = _context.UserRoles.Where(ur => ur.RoleId == filtroRoles)
+                        .Select(ur => ur.UserId).Distinct().ToList();
+                    baseQuery = baseQuery.Where(x => userIdsForRole.Contains(x.Id));
+                }
+            }
+
+            var query = baseQuery
                 .Select(usu => new UsuarioEndpointListadoDTO
                 {
                     Id = usu.Id,
@@ -49,7 +86,10 @@ namespace EstanciasCore.Areas.Administracion.Endpoints
                     Administrador = usu.Administradores,
                     AdministradorTexto = usu.Administradores == true ? "SI" : "NO",
                     NroDocumento = usu.Personas != null ? usu.Personas.NroDocumento : " ",
-                    Categoria = usu.UsuariosCategorias != null ? usu.UsuariosCategorias.Nombre : "Sin Categoría"
+                    Categoria = usu.UsuariosCategorias != null ? usu.UsuariosCategorias.Nombre : "Sin Categoría",
+                    CodigoColor = usu.UsuariosCategorias != null ? usu.UsuariosCategorias.CodigoColor : null,
+                    Incobrable = usu.Incobrable,
+                    TipoUsuario = usu.UsuarioSucursal ? "Sucursal" : "Común"
                 });
 
             if (!string.IsNullOrWhiteSpace(buscar))
@@ -79,6 +119,77 @@ namespace EstanciasCore.Areas.Administracion.Endpoints
                 TotalPaginas = (int)Math.Ceiling(total / (double)cantidad),
                 Buscar = buscar ?? ""
             });
+        }
+
+        [HttpPost("crear-sucursal")]
+        public async Task<IActionResult> CreateUserSucursal([FromBody] UsuarioSucursalVM vm)
+        {
+            try
+            {
+                if (vm == null || string.IsNullOrWhiteSpace(vm.Mail))
+                    return BadRequest(new UsuarioEndpointResponseDTO { Success = false, Respuesta = false, Message = "Debe ingresar el mail." });
+
+                if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
+
+                var user = await _userService.FindByEmailAsync(vm.Mail.Trim());
+                if (user != null)
+                    return BadRequest(new UsuarioEndpointResponseDTO { Success = false, Respuesta = false, Message = "El mail ya se encuentra registrado." });
+
+                Usuario nuevoUsuario = new Usuario
+                {
+                    UserName = vm.Mail.Trim(),
+                    Email = vm.Mail.Trim(),
+                    Mail = vm.Mail.Trim(),
+                    Password = vm.Password,
+                    Administradores = false,
+                    UsuarioSucursal = true,
+                    Sucursales = await _context.Sucursales.FindAsync(vm.SucursalId),
+                    EmailConfirmed = true
+                };
+
+                var result = await _userService.CreateAsync(nuevoUsuario, vm.Password);
+                if (!result.Succeeded)
+                    return BadRequest(new UsuarioEndpointResponseDTO { Success = false, Respuesta = false, Message = "Ocurrió un error al crear el Usuario Sucursal.", Data = result.Errors });
+
+                Persona nuevaPersona = new Persona
+                {
+                    NroDocumento = "",
+                    Nombres = vm.Nombre,
+                    Apellido = "",
+                    Email = vm.Mail.Trim()
+                };
+                await _context.Personas.AddAsync(nuevaPersona);
+                nuevoUsuario.Personas = nuevaPersona;
+                _context.Usuarios.Update(nuevoUsuario);
+                await _context.SaveChangesAsync();
+
+                return Ok(new UsuarioEndpointResponseDTO { Success = true, Respuesta = true, Message = "Usuario Sucursal creado correctamente.", Data = new { nuevoUsuario.Id } });
+            }
+            catch (Exception)
+            {
+                return BadRequest(new UsuarioEndpointResponseDTO { Success = false, Respuesta = false, Message = "Ocurrió un error al crear el Usuario Sucursal." });
+            }
+        }
+
+        [HttpPatch("{id}/incobrable")]
+        public async Task<IActionResult> ToggleIncobrable(string id)
+        {
+            try
+            {
+                var usuario = await _context.Usuarios.FindAsync(id);
+                if (usuario == null)
+                    return NotFound(new { success = false, mensaje = "Usuario no encontrado." });
+
+                usuario.Incobrable = !usuario.Incobrable;
+                _context.Usuarios.Update(usuario);
+                await _context.SaveChangesAsync();
+                return Ok(new { success = true, incobrable = usuario.Incobrable, mensaje = "Estado Incobrable actualizado correctamente." });
+            }
+            catch (Exception)
+            {
+                return BadRequest(new { success = false, mensaje = "Error al actualizar el estado Incobrable." });
+            }
         }
 
         [HttpGet("obtener/{id}")]

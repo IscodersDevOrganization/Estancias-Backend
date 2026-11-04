@@ -3,9 +3,11 @@ using DAL.DTOs;
 using DAL.Models;
 using EstanciasCore.API.Filters;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Linq;
+using System.IO;
 using System.Threading.Tasks;
 
 namespace EstanciasCore.Endpoints
@@ -366,6 +368,85 @@ namespace EstanciasCore.Endpoints
                     Alias = datosEstructuraUpdate.Alias
                 }
             });
+        }
+
+        // POST: endpoint/empresas/5/imagenes
+        [HttpPost("{id}/imagenes")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> SubirImagenes(
+            int id,
+            IFormFile FondoMobile,
+            IFormFile GIFLogoMutual,
+            IFormFile LogoMutual,
+            IFormFile ImagenLogin)
+        {
+            try
+            {
+                var empresa = await _context.Empresas.FindAsync(id);
+
+                if (empresa == null)
+                {
+                    return NotFound(new
+                    {
+                        ok = false,
+                        message = "No se encontró la empresa."
+                    });
+                }
+
+                if (FondoMobile != null)
+                {
+                    using (var memoryStream = new MemoryStream())
+                    {
+                        await FondoMobile.CopyToAsync(memoryStream);
+                        empresa.FondoMobile = memoryStream.ToArray();
+                    }
+                }
+
+                if (GIFLogoMutual != null)
+                {
+                    using (var memoryStream = new MemoryStream())
+                    {
+                        await GIFLogoMutual.CopyToAsync(memoryStream);
+                        empresa.GIFLogoMutual = memoryStream.ToArray();
+                    }
+                }
+
+                if (LogoMutual != null)
+                {
+                    using (var memoryStream = new MemoryStream())
+                    {
+                        await LogoMutual.CopyToAsync(memoryStream);
+                        empresa.LogoMutual = memoryStream.ToArray();
+                    }
+                }
+
+                if (ImagenLogin != null)
+                {
+                    using (var memoryStream = new MemoryStream())
+                    {
+                        await ImagenLogin.CopyToAsync(memoryStream);
+                        empresa.ImagenLogin = memoryStream.ToArray();
+                    }
+                }
+
+                _context.Empresas.Update(empresa);
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    ok = true,
+                    message = "Se cargaron correctamente las imágenes de la empresa.",
+                    data = new { Id = empresa.Id }
+                });
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new
+                {
+                    ok = false,
+                    message = "Hubo un error al cargar las imágenes de la empresa. Intentelo nuevamente más tarde."
+                });
+            }
         }
 
         // DELETE: endpoint/empresas/5

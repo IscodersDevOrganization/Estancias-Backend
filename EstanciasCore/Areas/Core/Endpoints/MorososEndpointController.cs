@@ -25,7 +25,6 @@ using System.Threading.Tasks;
 namespace EstanciasCore.Areas.Core.Controllers
 {
     // Aplicar además la política/roles de acceso de Morosos de la aplicación.
-    [Authorize]
     [ApiController]
     [TypeFilter(typeof(EndpointUatAuthorizeAttribute))]
     [Route("endpoint/morosos")]
